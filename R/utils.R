@@ -137,7 +137,7 @@ is_valid_viscometer_id <- function(x) {
 #'   package defaults to 5 for intermediate/internal reporting so round
 #'   explicitly to 4 when producing a final client report.
 #' @return A character string with `x` rounded to `digits` significant figures.
-#' @keywords internal
+#' @export
 format_significant <- function(x, digits = 5) {
   if (is.na(x)) {
     return(NA_character_)

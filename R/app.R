@@ -175,10 +175,10 @@ app_server <- function(input, output, session) {
       }
       sprintf(
         "Viscosity: %s mm2/s\nDeterminability: %s (%s of %s)%s",
-        format_significant(out$kinematic_viscosity_cSt),
+        kinvicalc::format_significant(out$kinematic_viscosity_cSt),
         out$determinability_result,
-        format_significant(out$determinability_difference),
-        format_significant(out$determinability_limit),
+        kinvicalc::format_significant(out$determinability_difference),
+        kinvicalc::format_significant(out$determinability_limit),
         flag_note
       )
     }

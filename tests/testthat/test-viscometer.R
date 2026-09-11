@@ -53,6 +53,58 @@ test_that("add_viscometer works with the current registry schema", {
   })
 })
 
+test_that("reference_db_connection rebuilds legacy viscometer tables", {
+  with_test_reference_db({
+    db_path <- file.path(
+      tempdir(),
+      sprintf("kinvicalc-test-%s.db", Sys.getpid())
+    )
+    db <- DBI::dbConnect(RSQLite::SQLite(), db_path)
+
+    DBI::dbExecute(
+      db,
+      "CREATE TABLE viscometers (
+        viscometer_id TEXT PRIMARY KEY,
+        viscometer_size NUMERIC,
+        serial_number TEXT,
+        calibration_date TEXT,
+        status TEXT
+      )"
+    )
+    DBI::dbExecute(
+      db,
+      "INSERT INTO viscometers (viscometer_id, viscometer_size, serial_number, calibration_date, status)
+       VALUES ('old-00001', 1, '00001', '2024-01-01', 'active')"
+    )
+    DBI::dbDisconnect(db)
+
+    viscometer <- tibble::tibble(
+      viscometer_id = "019-00019",
+      viscometer_size = 19,
+      serial_number = "00019",
+      calibration_date = as.Date("2024-12-19"),
+      status = "active",
+      factor_40_top = 0.19,
+      factor_40_bottom = 0.20,
+      factor_100_top = 0.21,
+      factor_100_bottom = 0.22,
+      added_by = "fresh-user",
+      notes = "rebuilt registry"
+    )
+
+    out <- add_viscometer(viscometer)
+
+    expect_equal(out$viscometer_id[1], "019-00019")
+    expect_equal(out$added_by[1], "fresh-user")
+    expect_equal(out$notes[1], "rebuilt registry")
+    expect_false("old-00001" %in% list_viscometers()$viscometer_id)
+    expect_true(all(
+      c("viscometer_id", "added_by", "notes", "created_at", "updated_at") %in%
+        names(list_viscometers())
+    ))
+  })
+})
+
 test_that("archive_viscometer and unarchive_viscometer toggle archived state", {
   with_test_reference_db({
     viscometer <- tibble::tibble(

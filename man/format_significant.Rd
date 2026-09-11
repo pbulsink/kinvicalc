@@ -20,4 +20,3 @@ A character string with \code{x} rounded to \code{digits} significant figures.
 \description{
 Format a numeric value to at least a given number of significant figures.
 }
-\keyword{internal}

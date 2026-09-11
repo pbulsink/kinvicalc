@@ -62,29 +62,6 @@ reference_db_connection <- function() {
 
   DBI::dbExecute(
     db,
-    "CREATE TABLE IF NOT EXISTS viscometers (
-      viscometer_id TEXT PRIMARY KEY,
-      viscometer_size NUMERIC,
-      serial_number TEXT,
-      calibration_date TEXT,
-      status TEXT,
-      factor_40_top NUMERIC,
-      factor_40_bottom NUMERIC,
-      factor_100_top NUMERIC,
-      factor_100_bottom NUMERIC,
-      use_count_since_cleaning INTEGER DEFAULT 0,
-      total_use_count INTEGER DEFAULT 0,
-      last_deep_cleaned_at TEXT,
-      archived_at TEXT,
-      added_by TEXT,
-      notes TEXT,
-      created_at TEXT,
-      updated_at TEXT
-    )"
-  )
-
-  DBI::dbExecute(
-    db,
     "CREATE TABLE IF NOT EXISTS sample_types (
       sample_type TEXT,
       metric TEXT,
@@ -100,29 +77,52 @@ reference_db_connection <- function() {
     )"
   )
 
-  viscometer_cols <- DBI::dbGetQuery(db, "PRAGMA table_info(viscometers)")$name
-  if (!"use_count_since_cleaning" %in% viscometer_cols) {
+  expected_viscometer_cols <- c(
+    "viscometer_id",
+    "viscometer_size",
+    "serial_number",
+    "calibration_date",
+    "status",
+    "factor_40_top",
+    "factor_40_bottom",
+    "factor_100_top",
+    "factor_100_bottom",
+    "use_count_since_cleaning",
+    "total_use_count",
+    "last_deep_cleaned_at",
+    "archived_at",
+    "added_by",
+    "notes",
+    "created_at",
+    "updated_at"
+  )
+  viscometer_info <- DBI::dbGetQuery(db, "PRAGMA table_info(viscometers)")
+  if (
+    nrow(viscometer_info) == 0 ||
+      !identical(viscometer_info$name, expected_viscometer_cols)
+  ) {
+    DBI::dbExecute(db, "DROP TABLE IF EXISTS viscometers")
     DBI::dbExecute(
       db,
-      "ALTER TABLE viscometers ADD COLUMN use_count_since_cleaning INTEGER DEFAULT 0"
-    )
-  }
-  if (!"total_use_count" %in% viscometer_cols) {
-    DBI::dbExecute(
-      db,
-      "ALTER TABLE viscometers ADD COLUMN total_use_count INTEGER DEFAULT 0"
-    )
-  }
-  if (!"last_deep_cleaned_at" %in% viscometer_cols) {
-    DBI::dbExecute(
-      db,
-      "ALTER TABLE viscometers ADD COLUMN last_deep_cleaned_at TEXT"
-    )
-  }
-  if (!"archived_at" %in% viscometer_cols) {
-    DBI::dbExecute(
-      db,
-      "ALTER TABLE viscometers ADD COLUMN archived_at TEXT"
+      "CREATE TABLE viscometers (
+        viscometer_id TEXT PRIMARY KEY,
+        viscometer_size NUMERIC,
+        serial_number TEXT,
+        calibration_date TEXT,
+        status TEXT,
+        factor_40_top NUMERIC,
+        factor_40_bottom NUMERIC,
+        factor_100_top NUMERIC,
+        factor_100_bottom NUMERIC,
+        use_count_since_cleaning INTEGER DEFAULT 0,
+        total_use_count INTEGER DEFAULT 0,
+        last_deep_cleaned_at TEXT,
+        archived_at TEXT,
+        added_by TEXT,
+        notes TEXT,
+        created_at TEXT,
+        updated_at TEXT
+      )"
     )
   }
 
@@ -175,8 +175,21 @@ save_reference_data <- function(viscometers = NULL, sample_types = NULL) {
       if (!"archived_at" %in% names(viscometers)) {
         viscometers$archived_at <- NA_character_
       }
+      if (!"added_by" %in% names(viscometers)) {
+        viscometers$added_by <- NA_character_
+      }
+      if (!"notes" %in% names(viscometers)) {
+        viscometers$notes <- NA_character_
+      }
+      if (!"created_at" %in% names(viscometers)) {
+        viscometers$created_at <- NA_character_
+      }
+      if (!"updated_at" %in% names(viscometers)) {
+        viscometers$updated_at <- NA_character_
+      }
 
-      DBI::dbWriteTable(db, "viscometers", viscometers, overwrite = TRUE)
+      DBI::dbExecute(db, "DELETE FROM viscometers")
+      DBI::dbWriteTable(db, "viscometers", viscometers, append = TRUE)
     }
   }
 
@@ -189,7 +202,17 @@ save_reference_data <- function(viscometers = NULL, sample_types = NULL) {
         sample_rule_required_fields,
         fn = "save_reference_data"
       )
-      DBI::dbWriteTable(db, "sample_types", sample_types, overwrite = TRUE)
+      if (!"notes" %in% names(sample_types)) {
+        sample_types$notes <- NA_character_
+      }
+      if (!"created_at" %in% names(sample_types)) {
+        sample_types$created_at <- NA_character_
+      }
+      if (!"updated_at" %in% names(sample_types)) {
+        sample_types$updated_at <- NA_character_
+      }
+      DBI::dbExecute(db, "DELETE FROM sample_types")
+      DBI::dbWriteTable(db, "sample_types", sample_types, append = TRUE)
     }
   }
 
