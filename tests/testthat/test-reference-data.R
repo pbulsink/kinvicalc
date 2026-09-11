@@ -12,7 +12,8 @@ test_that("save_reference_data and load_reference_data round-trip viscometers an
       factor_100_bottom = 0.14,
       use_count_since_cleaning = 3L,
       total_use_count = 5L,
-      last_deep_cleaned_at = "2024-11-02 10:00:00"
+      last_deep_cleaned_at = "2024-11-02 10:00:00",
+      archived_at = NA_character_
     )
 
     sample_rule <- tibble::tibble(
@@ -34,6 +35,7 @@ test_that("save_reference_data and load_reference_data round-trip viscometers an
     expect_equal(nrow(out$viscometers), 1)
     expect_equal(out$viscometers$viscometer_id[1], "011-00011")
     expect_equal(out$viscometers$total_use_count[1], 5L)
+    expect_true(is.na(out$viscometers$archived_at[1]))
     expect_equal(nrow(out$sample_types), 1)
     expect_equal(out$sample_types$sample_type[1], "round_trip_oil")
   })

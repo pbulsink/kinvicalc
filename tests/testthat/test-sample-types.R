@@ -60,6 +60,14 @@ test_that("unverified precision cells raise a clear error rather than a silent g
   )
 })
 
+test_that("pretty sample type labels are title-cased", {
+  expect_equal(kinvicalc:::format_sample_type_label("jet_fuel"), "Jet Fuel")
+  expect_equal(
+    kinvicalc:::format_sample_type_label("used_inservice_formulated_oil"),
+    "Used Inservice Formulated Oil"
+  )
+})
+
 test_that("add_sample_type_rule stores and retrieves a custom rule", {
   rule <- tibble::tibble(
     sample_type = "custom_oil",

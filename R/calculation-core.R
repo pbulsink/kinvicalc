@@ -75,6 +75,7 @@ reference_db_connection <- function() {
       use_count_since_cleaning INTEGER DEFAULT 0,
       total_use_count INTEGER DEFAULT 0,
       last_deep_cleaned_at TEXT,
+      archived_at TEXT,
       added_by TEXT,
       notes TEXT,
       created_at TEXT,
@@ -116,6 +117,12 @@ reference_db_connection <- function() {
     DBI::dbExecute(
       db,
       "ALTER TABLE viscometers ADD COLUMN last_deep_cleaned_at TEXT"
+    )
+  }
+  if (!"archived_at" %in% viscometer_cols) {
+    DBI::dbExecute(
+      db,
+      "ALTER TABLE viscometers ADD COLUMN archived_at TEXT"
     )
   }
 
@@ -164,6 +171,9 @@ save_reference_data <- function(viscometers = NULL, sample_types = NULL) {
       }
       if (!"last_deep_cleaned_at" %in% names(viscometers)) {
         viscometers$last_deep_cleaned_at <- NA_character_
+      }
+      if (!"archived_at" %in% names(viscometers)) {
+        viscometers$archived_at <- NA_character_
       }
 
       DBI::dbWriteTable(db, "viscometers", viscometers, overwrite = TRUE)

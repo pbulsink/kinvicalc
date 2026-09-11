@@ -13,5 +13,6 @@ add_viscometer(viscometer)
 The inserted viscometer record.
 }
 \description{
-Add a viscometer record to the local registry.
+New records initialize \code{use_count_since_cleaning} and \code{total_use_count} to 0,
+and \code{last_deep_cleaned_at} to \code{NA}.
 }

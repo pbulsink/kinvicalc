@@ -7,15 +7,24 @@ vignette: >
   %\VignetteEncoding{UTF-8}
 ---
 
-```{r, include = FALSE}
+This vignette walks through the package workflow end to end: register a viscometer,
+calculate a kinematic viscosity result, and render the report that a lab operator
+would review.
+
+The examples use a temporary registry so the vignette builds the same way in a
+clean package check and in an interactive session.
+
+```{r setup, include = FALSE}
+options(kinvicalc.reference_db_path = tempfile("kinvicalc-vignette-", fileext = ".db"))
 library(kinvicalc)
 ```
 
-This vignette shows the most common package workflows: creating a viscometer, calculating a viscosity result, and rendering a report.
+## Register a viscometer
 
-## Add a viscometer
+Before any calculation can run, the registry needs a viscometer record with a
+calibrated constant for each temperature used by the workflow.
 
-```{r}
+```{r register-viscometer}
 viscometer <- tibble::tibble(
   viscometer_id = "001-00001",
   viscometer_size = 1,
@@ -31,9 +40,17 @@ viscometer <- tibble::tibble(
 add_viscometer(viscometer)
 ```
 
-## Build a result
+The inserted record is returned from the registry, which makes it easy to confirm
+that the identifier, factors, and status were stored as expected.
 
-```{r}
+## Calculate a sample result
+
+A sample result uses two flow-time measurements from the same viscometer. The
+package resolves the calibration factor at the analysis temperature, calculates
+each determination, and checks whether the pair satisfies the determinability
+criterion.
+
+```{r calculate-result}
 result <- build_sample_result(
   viscometer_id = "001-00001",
   sample_type = "base_oil",
@@ -45,10 +62,26 @@ result <- build_sample_result(
 result
 ```
 
-## Generate a report
+This example produces a passed result with a single reported viscosity and a
+shared determinability limit. If either flow time is below the method minimum,
+the result is still returned but is flagged for review.
 
-```{r, eval = FALSE}
+## Render a report
+
+The report helpers format the calculation for a lab record or client-facing
+summary. In an interactive session, `render_primary_report()` opens the HTML
+output directly.
+
+```{r render-report, eval = FALSE}
 render_primary_report(result)
 ```
 
-This package is intentionally structured so the same functions can be used from scripts, tests, and the Shiny app.
+The same workflow is used in scripts, tests, and the Shiny app, so keeping this
+example current is a good check that the package API still fits the intended
+workflow.
+
+## Summary
+
+`kinvicalc` centers the workflow around a local viscometer registry, a pair of
+flow-time measurements, and a reportable result object. If this vignette builds
+successfully, the main package path is working end to end.

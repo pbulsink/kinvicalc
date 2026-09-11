@@ -104,6 +104,30 @@ list_viscometers <- function() {
   tibble::as_tibble(DBI::dbGetQuery(db, query))
 }
 
+#' List active viscometers in the local registry.
+#'
+#' @return A tibble of non-archived viscometer records.
+#' @export
+list_active_viscometers <- function() {
+  viscometers <- list_viscometers()
+  if (!"archived_at" %in% names(viscometers)) {
+    return(viscometers)
+  }
+  viscometers[is.na(viscometers$archived_at), ]
+}
+
+#' List archived viscometers in the local registry.
+#'
+#' @return A tibble of archived viscometer records.
+#' @export
+list_archived_viscometers <- function() {
+  viscometers <- list_viscometers()
+  if (!"archived_at" %in% names(viscometers)) {
+    return(viscometers[0, ])
+  }
+  viscometers[!is.na(viscometers$archived_at), ]
+}
+
 #' Get one viscometer by identifier.
 #'
 #' @param viscometer_id A viscometer identifier.
@@ -147,6 +171,9 @@ get_viscometer <- function(viscometer_id) {
 #' @export
 add_viscometer <- function(viscometer) {
   viscometer <- validate_viscometer_record(viscometer)
+  if (!"archived_at" %in% names(viscometer)) {
+    viscometer$archived_at <- NA_character_
+  }
 
   db <- reference_db_connection()
   on.exit(DBI::dbDisconnect(db), add = TRUE)
@@ -160,7 +187,7 @@ add_viscometer <- function(viscometer) {
   if (nrow(existing) > 0) {
     DBI::dbExecute(
       db,
-      "UPDATE viscometers SET viscometer_size = ?, serial_number = ?, calibration_date = ?, status = ?, factor_40_top = ?, factor_40_bottom = ?, factor_100_top = ?, factor_100_bottom = ?, added_by = COALESCE(?, added_by), updated_at = CURRENT_TIMESTAMP, notes = COALESCE(?, notes) WHERE viscometer_id = ?",
+      "UPDATE viscometers SET viscometer_size = ?, serial_number = ?, calibration_date = ?, status = ?, factor_40_top = ?, factor_40_bottom = ?, factor_100_top = ?, factor_100_bottom = ?, updated_at = CURRENT_TIMESTAMP, added_by = COALESCE(?, added_by), notes = COALESCE(?, notes) WHERE viscometer_id = ?",
       params = list(
         viscometer$viscometer_size[1],
         as.character(viscometer$serial_number[1]),
@@ -214,11 +241,74 @@ add_viscometer <- function(viscometer) {
   get_viscometer(viscometer$viscometer_id[1])
 }
 
-#' Increment viscometer use counters by one.
+#' Archive a viscometer in the local registry.
 #'
 #' @param viscometer_id A viscometer identifier.
-#' @return Invisibly TRUE when updated.
+#' @return The updated viscometer record.
 #' @export
+archive_viscometer <- function(viscometer_id) {
+  assert_string(viscometer_id, "viscometer_id", fn = "archive_viscometer")
+
+  db <- reference_db_connection()
+  on.exit(DBI::dbDisconnect(db), add = TRUE)
+
+  updated <- DBI::dbExecute(
+    db,
+    "UPDATE viscometers SET archived_at = COALESCE(archived_at, CURRENT_TIMESTAMP), updated_at = CURRENT_TIMESTAMP WHERE viscometer_id = ?",
+    params = list(viscometer_id)
+  )
+
+  if (updated == 0) {
+    cli::cli_abort(c(
+      "{.fn archive_viscometer}: no viscometer found for {.val {viscometer_id}}.",
+      "i" = "Check the identifier and add it with {.fn add_viscometer} if it is new."
+    ))
+  }
+
+  get_viscometer(viscometer_id)
+}
+
+#' Unarchive a viscometer in the local registry.
+#'
+#' @param viscometer_id A viscometer identifier.
+#' @return The updated viscometer record.
+#' @export
+unarchive_viscometer <- function(viscometer_id) {
+  assert_string(viscometer_id, "viscometer_id", fn = "unarchive_viscometer")
+
+  db <- reference_db_connection()
+  on.exit(DBI::dbDisconnect(db), add = TRUE)
+
+  updated <- DBI::dbExecute(
+    db,
+    "UPDATE viscometers SET archived_at = NULL, updated_at = CURRENT_TIMESTAMP WHERE viscometer_id = ?",
+    params = list(viscometer_id)
+  )
+
+  if (updated == 0) {
+    cli::cli_abort(c(
+      "{.fn unarchive_viscometer}: no viscometer found for {.val {viscometer_id}}.",
+      "i" = "Check the identifier and add it with {.fn add_viscometer} if it is new."
+    ))
+  }
+
+  get_viscometer(viscometer_id)
+}
+
+
+#' Increment viscometer use counters by one.
+#'
+#' Records one additional use of a viscometer by incrementing both the
+#' `use_count_since_cleaning` and `total_use_count` fields in the local
+#' registry.
+#'
+#' @param viscometer_id A viscometer identifier.
+#' @return Invisibly `TRUE` when the counter update succeeds.
+#' @export
+#' @examples
+#' \dontrun{
+#' increment_viscometer_use("007-00007")
+#' }
 increment_viscometer_use <- function(viscometer_id) {
   assert_string(viscometer_id, "viscometer_id", fn = "increment_viscometer_use")
 
@@ -247,12 +337,16 @@ increment_viscometer_use <- function(viscometer_id) {
 
 #' Reset viscometer use count since deep cleaning.
 #'
-#' Sets `use_count_since_cleaning` to 0 and updates `last_deep_cleaned_at` to
-#' the current timestamp.
+#' Resets the post-cleaning usage counter for a viscometer and records the
+#' current time as the most recent deep-clean timestamp.
 #'
 #' @param viscometer_id A viscometer identifier.
-#' @return A one-row tibble of use counters for the viscometer.
+#' @return A one-row tibble with the updated use counters for the viscometer.
 #' @export
+#' @examples
+#' \dontrun{
+#' reset_viscometer_use_count("007-00007")
+#' }
 reset_viscometer_use_count <- function(viscometer_id) {
   assert_string(
     viscometer_id,
@@ -285,10 +379,18 @@ reset_viscometer_use_count <- function(viscometer_id) {
 
 #' Get viscometer use counters.
 #'
+#' Returns the current use summary for a single viscometer, including the
+#' number of uses since the last deep cleaning and the overall lifetime use
+#' count.
+#'
 #' @param viscometer_id A viscometer identifier.
 #' @return A one-row tibble with `viscometer_id`, `use_count_since_cleaning`,
 #'   `total_use_count`, and `last_deep_cleaned_at`.
 #' @export
+#' @examples
+#' \dontrun{
+#' get_viscometer_use_summary("007-00007")
+#' }
 get_viscometer_use_summary <- function(viscometer_id) {
   assert_string(
     viscometer_id,

@@ -69,6 +69,62 @@ assert_date <- function(x, name, fn = NULL) {
   }
 }
 
+format_sample_type_label <- function(sample_type) {
+  if (is.na(sample_type)) {
+    return(NA_character_)
+  }
+
+  tools::toTitleCase(gsub("_", " ", sample_type, fixed = TRUE))
+}
+
+sample_type_choices <- function() {
+  rules <- load_reference_data()$sample_types
+  sample_types <- sort(unique(rules$sample_type))
+  stats::setNames(
+    sample_types,
+    vapply(sample_types, format_sample_type_label, character(1))
+  )
+}
+
+format_viscometer_label <- function(viscometer) {
+  archived <- if (
+    isTRUE(
+      !is.na(viscometer$archived_at[1]) && nzchar(viscometer$archived_at[1])
+    )
+  ) {
+    " [archived]"
+  } else {
+    ""
+  }
+
+  sprintf(
+    "%s (size %s)%s",
+    viscometer$viscometer_id[1],
+    viscometer$viscometer_size[1],
+    archived
+  )
+}
+
+viscometer_choices <- function(include_archived = FALSE) {
+  viscometers <- list_viscometers()
+  if (!include_archived && "archived_at" %in% names(viscometers)) {
+    viscometers <- viscometers[is.na(viscometers$archived_at), ]
+  }
+
+  if (nrow(viscometers) == 0) {
+    return(stats::setNames(character(0), character(0)))
+  }
+
+  stats::setNames(
+    viscometers$viscometer_id,
+    vapply(
+      split(viscometers, seq_len(nrow(viscometers))),
+      format_viscometer_label,
+      character(1)
+    )
+  )
+}
+
 is_valid_viscometer_id <- function(x) {
   grepl("^[0-9]{3}-[0-9]{5}$", x)
 }

@@ -10,5 +10,6 @@ list_viscometers()
 A tibble of viscometer records.
 }
 \description{
-List all viscometers in the local registry.
+Includes use counters (\code{use_count_since_cleaning}, \code{total_use_count}) and
+the most recent deep-clean timestamp (\code{last_deep_cleaned_at}) when available.
 }

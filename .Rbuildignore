@@ -4,5 +4,9 @@
 ^\.DS_Store$
 ^README\.Rmd$
 ^\.github$
-^vignettes/$
 ^tests/testthat/_snaps$
+^AGENTS\.md$
+^.*\.pdf$
+^D446-24\.pdf$
+^coverage\.xml$
+^cobertura\.xml$

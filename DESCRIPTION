@@ -3,7 +3,8 @@ Type: Package
 Title: Kinematic Viscosity Calculation Tools
 Version: 0.1.0
 Authors@R: c(
-    person("Posit", "Assistant", email = "assistant@example.com", role = c("aut", "cre")))
+    person("Philip", "Bulsink", email = "philip.bulsink@nrcan-rncan.gc.ca", role = c("aut", "cre")),
+    person("His Majesty the King in Right of Canada, as represented by the Minister of Natural Resources", role = 'cph'))
 Description: Provides calculation helpers, validation, persistence, and Shiny
     reporting for viscometer-based kinematic viscosity workflows.
 License: GPL-3

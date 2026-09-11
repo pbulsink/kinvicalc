@@ -29,7 +29,31 @@ test_that("viscometer registry stores and retrieves records", {
   })
 })
 
-test_that("remove_viscometer deletes a viscometer record", {
+
+test_that("add_viscometer works with the current registry schema", {
+  with_test_reference_db({
+    viscometer <- tibble::tibble(
+      viscometer_id = "012-00012",
+      viscometer_size = 12,
+      serial_number = "00012",
+      calibration_date = as.Date("2024-12-01"),
+      status = "active",
+      factor_40_top = 0.12,
+      factor_40_bottom = 0.13,
+      factor_100_top = 0.14,
+      factor_100_bottom = 0.15,
+      notes = "regression test"
+    )
+
+    out <- add_viscometer(viscometer)
+
+    expect_equal(out$viscometer_id[1], "012-00012")
+    expect_equal(out$notes[1], "regression test")
+    expect_equal(nrow(list_viscometers()), 1)
+  })
+})
+
+test_that("archive_viscometer and unarchive_viscometer toggle archived state", {
   with_test_reference_db({
     viscometer <- tibble::tibble(
       viscometer_id = "003-00003",
@@ -44,9 +68,36 @@ test_that("remove_viscometer deletes a viscometer record", {
     )
 
     add_test_viscometer(viscometer)
-    expect_true(remove_viscometer("003-00003"))
-    expect_false(remove_viscometer("003-00003"))
-    expect_error(get_viscometer("003-00003"), "no viscometer found")
+    archived <- archive_viscometer("003-00003")
+    expect_false(is.na(archived$archived_at[1]))
+    expect_equal(nrow(list_active_viscometers()), 0)
+    expect_equal(nrow(list_archived_viscometers()), 1)
+
+    unarchived <- unarchive_viscometer("003-00003")
+    expect_true(is.na(unarchived$archived_at[1]))
+    expect_equal(nrow(list_active_viscometers()), 1)
+    expect_equal(nrow(list_archived_viscometers()), 0)
+  })
+})
+
+test_that("remove_viscometer deletes a viscometer record", {
+  with_test_reference_db({
+    viscometer <- tibble::tibble(
+      viscometer_id = "013-00003",
+      viscometer_size = 3,
+      serial_number = "00003",
+      calibration_date = as.Date("2024-03-01"),
+      status = "active",
+      factor_40_top = 0.09,
+      factor_40_bottom = 0.10,
+      factor_100_top = 0.11,
+      factor_100_bottom = 0.12
+    )
+
+    add_test_viscometer(viscometer)
+    expect_true(remove_viscometer("013-00003"))
+    expect_false(remove_viscometer("013-00003"))
+    expect_error(get_viscometer("013-00003"), "no viscometer found")
   })
 })
 

@@ -204,6 +204,12 @@ build_sample_result <- function(
   notes = NA_character_
 ) {
   viscometer <- get_viscometer(viscometer_id)
+  if (!is.na(viscometer$archived_at[1])) {
+    cli::cli_abort(c(
+      "{.fn build_sample_result}: viscometer {.val {viscometer_id}} is archived.",
+      "i" = "Unarchive the viscometer before using it for a calculation."
+    ))
+  }
   # NOTE: the viscometer registry still stores separate "top"/"bottom"
   # calibration factors from the original (non-conformant) design; D445/D446
   # do not have a "top bulb" vs "bottom bulb" factor concept -- a viscometer

@@ -34,9 +34,12 @@ render_primary_report <- function(result, output_path = NULL, digits = 5) {
     html <- paste0(
       "<html><body><h1>Primary Sample Report (intermediate)</h1>",
       sprintf("<p>Viscometer: %s</p>", result$viscometer_id),
-      sprintf("<p>Sample type: %s</p>", result$sample_type),
       sprintf(
-        "<p>Temperature: %s C</p>",
+        "<p>Sample type: %s</p>",
+        format_sample_type_label(result$sample_type)
+      ),
+      sprintf(
+        "<p>Temperature: %s \u00b0C</p>",
         format_significant(result$analysis_temperature_c, digits)
       ),
       sprintf(
@@ -89,9 +92,9 @@ render_high_density_report <- function(
           ""
         }
         sprintf(
-          "%s, %s, %s C, %s, %s%s",
+          "%s, %s, %s \u00b0C, %s, %s%s",
           x$viscometer_id,
-          x$sample_type,
+          format_sample_type_label(x$sample_type),
           format_significant(x$analysis_temperature_c, digits),
           format_significant(x$kinematic_viscosity_cSt, digits),
           x$determinability_result,
