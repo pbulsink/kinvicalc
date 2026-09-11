@@ -24,5 +24,12 @@ supported identifiers drawn from ASTM D445-26 17.1.1, 17.1.2, 17.2.1, and
 A one-row tibble for the requested rule.
 }
 \description{
-Get a sample-type precision rule.
+If no rule is defined for \code{sample_type} at \code{analysis_temperature_c} (for
+the given \code{metric}), this falls back to the \code{"unlisted"} rule set (ASTM
+D445-26 12.4.1/11.2.4 fallback limits for materials/temperatures not
+explicitly tabulated in Section 17), rather than raising an error. A rule
+that exists but is marked unverified (\code{coefficient_a} is \code{NA}) is not
+silently replaced by the fallback -- that still errors, since transcription
+of that cell could not be confirmed and using the "unlisted" limit in its
+place could mask an ASTM-defined value that differs from the fallback.
 }

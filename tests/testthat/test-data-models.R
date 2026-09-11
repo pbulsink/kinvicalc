@@ -1,10 +1,8 @@
 test_that("build_sample_result computes viscosity and determinability using base_oil rules", {
   with_test_reference_db({
     viscometer <- tibble::tibble(
-      viscometer_id = "004-00004",
       viscometer_size = 4,
       serial_number = "00004",
-      calibration_date = as.Date("2024-04-01"),
       status = "active",
       factor_40_top = 0.025,
       factor_40_bottom = 0.025,
@@ -32,10 +30,8 @@ test_that("build_sample_result computes viscosity and determinability using base
 test_that("build_sample_result flags results with a flow time below the minimum", {
   with_test_reference_db({
     viscometer <- tibble::tibble(
-      viscometer_id = "005-00005",
       viscometer_size = 5,
       serial_number = "00005",
-      calibration_date = as.Date("2024-05-01"),
       status = "active",
       factor_40_top = 0.025,
       factor_40_bottom = 0.025,
@@ -61,10 +57,8 @@ test_that("build_sample_result flags results with a flow time below the minimum"
 test_that("build_sample_result warns when determinability fails", {
   with_test_reference_db({
     viscometer <- tibble::tibble(
-      viscometer_id = "006-00006",
       viscometer_size = 6,
       serial_number = "00006",
-      calibration_date = as.Date("2024-06-01"),
       status = "active",
       factor_40_top = 0.025,
       factor_40_bottom = 0.025,

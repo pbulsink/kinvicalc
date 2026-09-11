@@ -77,53 +77,58 @@ reference_db_connection <- function() {
     )"
   )
 
+  # Column name -> SQL type/default, used both for initial table creation
+  # and for additive migration (ALTER TABLE ADD COLUMN) on existing
+  # databases. Do not drop-and-recreate `viscometers`: that silently
+  # destroys operator-entered records whenever this list changes.
   expected_viscometer_cols <- c(
-    "viscometer_id",
-    "viscometer_size",
-    "serial_number",
-    "calibration_date",
-    "status",
-    "factor_40_top",
-    "factor_40_bottom",
-    "factor_100_top",
-    "factor_100_bottom",
-    "use_count_since_cleaning",
-    "total_use_count",
-    "last_deep_cleaned_at",
-    "archived_at",
-    "added_by",
-    "notes",
-    "created_at",
-    "updated_at"
+    viscometer_id = "TEXT PRIMARY KEY",
+    viscometer_size = "NUMERIC",
+    serial_number = "TEXT",
+    status = "TEXT",
+    factor_40_top = "NUMERIC",
+    factor_40_bottom = "NUMERIC",
+    factor_100_top = "NUMERIC",
+    factor_100_bottom = "NUMERIC",
+    use_count_since_cleaning = "INTEGER DEFAULT 0",
+    total_use_count = "INTEGER DEFAULT 0",
+    last_deep_cleaned_at = "TEXT",
+    archived_at = "TEXT",
+    added_by = "TEXT",
+    notes = "TEXT",
+    created_at = "TEXT",
+    updated_at = "TEXT"
   )
   viscometer_info <- DBI::dbGetQuery(db, "PRAGMA table_info(viscometers)")
-  if (
-    nrow(viscometer_info) == 0 ||
-      !identical(viscometer_info$name, expected_viscometer_cols)
-  ) {
-    DBI::dbExecute(db, "DROP TABLE IF EXISTS viscometers")
+  if (nrow(viscometer_info) == 0) {
     DBI::dbExecute(
       db,
-      "CREATE TABLE viscometers (
-        viscometer_id TEXT PRIMARY KEY,
-        viscometer_size NUMERIC,
-        serial_number TEXT,
-        calibration_date TEXT,
-        status TEXT,
-        factor_40_top NUMERIC,
-        factor_40_bottom NUMERIC,
-        factor_100_top NUMERIC,
-        factor_100_bottom NUMERIC,
-        use_count_since_cleaning INTEGER DEFAULT 0,
-        total_use_count INTEGER DEFAULT 0,
-        last_deep_cleaned_at TEXT,
-        archived_at TEXT,
-        added_by TEXT,
-        notes TEXT,
-        created_at TEXT,
-        updated_at TEXT
-      )"
+      sprintf(
+        "CREATE TABLE viscometers (%s)",
+        paste(
+          sprintf(
+            "%s %s",
+            names(expected_viscometer_cols),
+            expected_viscometer_cols
+          ),
+          collapse = ", "
+        )
+      )
     )
+  } else {
+    missing_cols <- setdiff(
+      names(expected_viscometer_cols),
+      viscometer_info$name
+    )
+    for (col in missing_cols) {
+      # SQLite disallows PRIMARY KEY/UNIQUE in ADD COLUMN; fall back to the
+      # bare type if the recorded definition can't be used post-creation.
+      col_def <- sub("\\s*PRIMARY KEY\\s*", "", expected_viscometer_cols[[col]])
+      DBI::dbExecute(
+        db,
+        sprintf("ALTER TABLE viscometers ADD COLUMN %s %s", col, col_def)
+      )
+    }
   }
 
   sample_rule_count <- DBI::dbGetQuery(
@@ -162,6 +167,23 @@ save_reference_data <- function(viscometers = NULL, sample_types = NULL) {
         viscometer_required_fields,
         fn = "save_reference_data"
       )
+
+      if (
+        !"viscometer_id" %in% names(viscometers) ||
+          all(is.na(viscometers$viscometer_id))
+      ) {
+        viscometers$viscometer_id <- vapply(
+          seq_len(nrow(viscometers)),
+          function(i) {
+            format_viscometer_id(
+              viscometers$viscometer_size[i],
+              viscometers$serial_number[i],
+              fn = "save_reference_data"
+            )
+          },
+          character(1)
+        )
+      }
 
       if (!"use_count_since_cleaning" %in% names(viscometers)) {
         viscometers$use_count_since_cleaning <- 0L
@@ -229,7 +251,7 @@ load_reference_data <- function() {
 
   viscometers <- tibble::as_tibble(DBI::dbGetQuery(
     db,
-    "SELECT * FROM viscometers ORDER BY viscometer_id"
+    "SELECT viscometer_id, viscometer_size, serial_number, status, factor_40_top, factor_40_bottom, factor_100_top, factor_100_bottom, use_count_since_cleaning, total_use_count, last_deep_cleaned_at, archived_at, added_by, notes, created_at, updated_at FROM viscometers ORDER BY viscometer_id"
   ))
   sample_types <- tibble::as_tibble(DBI::dbGetQuery(
     db,

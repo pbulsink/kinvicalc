@@ -26,10 +26,8 @@ test_that("calculate_kinematic_viscosity rounds using round-half-to-even", {
 
 test_that("resolve_calibration_factor interpolates between standard temperatures", {
   viscometer <- tibble::tibble(
-    viscometer_id = "001-00001",
     viscometer_size = 1,
     serial_number = "00001",
-    calibration_date = as.Date("2024-01-01"),
     status = "active",
     factor_40_top = 0.02,
     factor_40_bottom = 0.03,

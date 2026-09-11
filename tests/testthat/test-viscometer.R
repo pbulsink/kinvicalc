@@ -9,10 +9,8 @@ test_that("viscometer validation accepts valid IDs and rejects invalid ones", {
 test_that("viscometer registry stores and retrieves records", {
   with_test_reference_db({
     viscometer <- tibble::tibble(
-      viscometer_id = "002-00002",
       viscometer_size = 2,
       serial_number = "00002",
-      calibration_date = as.Date("2024-02-01"),
       status = "active",
       factor_40_top = 0.05,
       factor_40_bottom = 0.06,
@@ -26,6 +24,20 @@ test_that("viscometer registry stores and retrieves records", {
     expect_equal(out$viscometer_id[1], "002-00002")
     expect_equal(out$factor_40_top[1], 0.05)
     expect_error(get_viscometer("bad-id"), "must match")
+    expect_error(
+      add_viscometer(
+        tibble::tibble(
+          viscometer_size = 2,
+          serial_number = "00002",
+          status = "active",
+          factor_40_top = 0.05,
+          factor_40_bottom = 0.06,
+          factor_100_top = 0.07,
+          factor_100_bottom = 0.08
+        )
+      ),
+      "already exists"
+    )
   })
 })
 
@@ -33,10 +45,8 @@ test_that("viscometer registry stores and retrieves records", {
 test_that("add_viscometer works with the current registry schema", {
   with_test_reference_db({
     viscometer <- tibble::tibble(
-      viscometer_id = "012-00012",
       viscometer_size = 12,
       serial_number = "00012",
-      calibration_date = as.Date("2024-12-01"),
       status = "active",
       factor_40_top = 0.12,
       factor_40_bottom = 0.13,
@@ -53,7 +63,7 @@ test_that("add_viscometer works with the current registry schema", {
   })
 })
 
-test_that("reference_db_connection rebuilds legacy viscometer tables", {
+test_that("reference_db_connection migrates legacy viscometer tables additively", {
   with_test_reference_db({
     db_path <- file.path(
       tempdir(),
@@ -79,10 +89,8 @@ test_that("reference_db_connection rebuilds legacy viscometer tables", {
     DBI::dbDisconnect(db)
 
     viscometer <- tibble::tibble(
-      viscometer_id = "019-00019",
       viscometer_size = 19,
       serial_number = "00019",
-      calibration_date = as.Date("2024-12-19"),
       status = "active",
       factor_40_top = 0.19,
       factor_40_bottom = 0.20,
@@ -97,21 +105,27 @@ test_that("reference_db_connection rebuilds legacy viscometer tables", {
     expect_equal(out$viscometer_id[1], "019-00019")
     expect_equal(out$added_by[1], "fresh-user")
     expect_equal(out$notes[1], "rebuilt registry")
-    expect_false("old-00001" %in% list_viscometers()$viscometer_id)
+    # The pre-existing legacy row must survive the schema migration: missing
+    # columns are added via ALTER TABLE, the table is never dropped.
+    expect_true("old-00001" %in% list_viscometers()$viscometer_id)
     expect_true(all(
       c("viscometer_id", "added_by", "notes", "created_at", "updated_at") %in%
         names(list_viscometers())
     ))
+
+    legacy_row <- list_viscometers()[
+      list_viscometers()$viscometer_id == "old-00001",
+    ]
+    expect_equal(legacy_row$status, "active")
+    expect_equal(legacy_row$serial_number, "00001")
   })
 })
 
 test_that("archive_viscometer and unarchive_viscometer toggle archived state", {
   with_test_reference_db({
     viscometer <- tibble::tibble(
-      viscometer_id = "003-00003",
       viscometer_size = 3,
       serial_number = "00003",
-      calibration_date = as.Date("2024-03-01"),
       status = "active",
       factor_40_top = 0.09,
       factor_40_bottom = 0.10,
@@ -135,10 +149,8 @@ test_that("archive_viscometer and unarchive_viscometer toggle archived state", {
 test_that("remove_viscometer deletes a viscometer record", {
   with_test_reference_db({
     viscometer <- tibble::tibble(
-      viscometer_id = "013-00003",
       viscometer_size = 3,
       serial_number = "00003",
-      calibration_date = as.Date("2024-03-01"),
       status = "active",
       factor_40_top = 0.09,
       factor_40_bottom = 0.10,
@@ -147,19 +159,17 @@ test_that("remove_viscometer deletes a viscometer record", {
     )
 
     add_test_viscometer(viscometer)
-    expect_true(remove_viscometer("013-00003"))
-    expect_false(remove_viscometer("013-00003"))
-    expect_error(get_viscometer("013-00003"), "no viscometer found")
+    expect_true(remove_viscometer("003-00003"))
+    expect_false(remove_viscometer("003-00003"))
+    expect_error(get_viscometer("003-00003"), "no viscometer found")
   })
 })
 
 test_that("new viscometers initialize use counters", {
   with_test_reference_db({
     viscometer <- tibble::tibble(
-      viscometer_id = "007-00007",
       viscometer_size = 7,
       serial_number = "00007",
-      calibration_date = as.Date("2024-07-01"),
       status = "active",
       factor_40_top = 0.05,
       factor_40_bottom = 0.06,
@@ -180,10 +190,8 @@ test_that("new viscometers initialize use counters", {
 test_that("increment_viscometer_use increments both counters", {
   with_test_reference_db({
     viscometer <- tibble::tibble(
-      viscometer_id = "008-00008",
       viscometer_size = 8,
       serial_number = "00008",
-      calibration_date = as.Date("2024-08-01"),
       status = "active",
       factor_40_top = 0.05,
       factor_40_bottom = 0.06,
@@ -205,10 +213,8 @@ test_that("increment_viscometer_use increments both counters", {
 test_that("reset_viscometer_use_count resets since-cleaning only", {
   with_test_reference_db({
     viscometer <- tibble::tibble(
-      viscometer_id = "009-00009",
       viscometer_size = 9,
       serial_number = "00009",
-      calibration_date = as.Date("2024-09-01"),
       status = "active",
       factor_40_top = 0.05,
       factor_40_bottom = 0.06,

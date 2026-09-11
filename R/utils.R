@@ -125,6 +125,48 @@ viscometer_choices <- function(include_archived = FALSE) {
   )
 }
 
+#' Format a viscometer ID
+#'
+#' Builds the canonical `NNN-NNNNN` viscometer ID (three-digit size prefix,
+#' hyphen, serial number) used as the primary key throughout the registry.
+#'
+#' @param viscometer_size Integer viscometer size number (1-999), per the
+#'   ASTM viscometer size designation used to construct the ID prefix.
+#' @param serial_number Character serial number, used as the ID suffix.
+#' @param fn Character scalar naming the calling function, used in error
+#'   messages. Defaults to the name of the calling function.
+#'
+#' @return A character scalar viscometer ID in `NNN-NNNNN` format.
+#'
+#' @examples
+#' format_viscometer_id(200, "12345")
+#'
+#' @export
+format_viscometer_id <- function(viscometer_size, serial_number, fn = NULL) {
+  if (is.null(fn)) {
+    fn <- as.character(sys.call(-1)[[1]])
+  }
+
+  assert_scalar_numeric(viscometer_size, "viscometer_size", fn = fn)
+  viscometer_size <- as.integer(viscometer_size)
+  if (viscometer_size <= 0 || viscometer_size > 999) {
+    cli::cli_abort(c(
+      "{.fn {fn}}: {.arg viscometer_size} must be an integer between 1 and 999.",
+      "i" = "Use the ASTM viscometer size number used to construct the three-digit ID prefix."
+    ))
+  }
+
+  assert_string(serial_number, "serial_number", fn = fn)
+  if (!grepl("^[0-9]{1,5}$", serial_number)) {
+    cli::cli_abort(c(
+      "{.fn {fn}}: {.arg serial_number} must contain only digits and be at most 5 characters.",
+      "i" = "Use the serial number digits only; the ID is built automatically as ###-#####."
+    ))
+  }
+
+  sprintf("%03d-%05d", as.integer(viscometer_size), as.integer(serial_number))
+}
+
 is_valid_viscometer_id <- function(x) {
   grepl("^[0-9]{3}-[0-9]{5}$", x)
 }

@@ -1,10 +1,8 @@
 test_that("lock_result marks result locked and increments viscometer use", {
   with_test_reference_db({
     viscometer <- tibble::tibble(
-      viscometer_id = "010-00010",
       viscometer_size = 10,
       serial_number = "00010",
-      calibration_date = as.Date("2024-10-01"),
       status = "active",
       factor_40_top = 0.025,
       factor_40_bottom = 0.025,
@@ -48,10 +46,8 @@ test_that("render_primary_report and render_high_density_report validate inputs"
 test_that("render_primary_report and render_high_density_report write text outputs", {
   with_test_reference_db({
     viscometer <- tibble::tibble(
-      viscometer_id = "012-00012",
       viscometer_size = 12,
       serial_number = "00012",
-      calibration_date = as.Date("2024-12-01"),
       status = "active",
       factor_40_top = 0.025,
       factor_40_bottom = 0.025,
@@ -95,10 +91,8 @@ test_that("render_primary_report and render_high_density_report write text outpu
 test_that("session_results_table summarizes result lists", {
   with_test_reference_db({
     viscometer <- tibble::tibble(
-      viscometer_id = "013-00013",
       viscometer_size = 13,
       serial_number = "00013",
-      calibration_date = as.Date("2024-12-13"),
       status = "active",
       factor_40_top = 0.025,
       factor_40_bottom = 0.025,

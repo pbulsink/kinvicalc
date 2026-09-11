@@ -1,10 +1,8 @@
 test_that("save_reference_data and load_reference_data round-trip viscometers and sample rules", {
   with_test_reference_db({
     viscometer <- tibble::tibble(
-      viscometer_id = "011-00011",
       viscometer_size = 11,
       serial_number = "00011",
-      calibration_date = as.Date("2024-11-01"),
       status = "active",
       factor_40_top = 0.11,
       factor_40_bottom = 0.12,

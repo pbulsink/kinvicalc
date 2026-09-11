@@ -12,6 +12,7 @@ build_sample_result(
   time_2,
   min_flow_time_s = MIN_FLOW_TIME_S,
   operator = NA_character_,
+  sample_id = NA_character_,
   notes = NA_character_
 )
 }
@@ -31,7 +32,11 @@ flagged. Defaults to 200 s (ASTM D445-26 6.1.2/10.2); override with the
 viscometer/size-specific minimum from Specifications D446 when it is
 higher.}
 
-\item{operator}{Optional operator name.}
+\item{operator}{Optional operator/user identifier performing the
+determination. Recorded on the result for traceability.}
+
+\item{sample_id}{Optional sample identifier/name being tested. Recorded on
+the result for traceability.}
 
 \item{notes}{Optional notes.}
 }

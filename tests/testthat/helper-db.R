@@ -27,7 +27,21 @@ cleanup_test_viscometer <- function(viscometer_id) {
 }
 
 add_test_viscometer <- function(viscometer) {
-  cleanup_test_viscometer(viscometer$viscometer_id[1])
+  viscometer_id <- if (
+    "viscometer_id" %in%
+      names(viscometer) &&
+      !is.na(viscometer$viscometer_id[1])
+  ) {
+    viscometer$viscometer_id[1]
+  } else {
+    kinvicalc:::format_viscometer_id(
+      viscometer$viscometer_size[1],
+      viscometer$serial_number[1],
+      fn = "add_test_viscometer"
+    )
+  }
+
+  cleanup_test_viscometer(viscometer_id)
   add_viscometer(viscometer)
   invisible(viscometer)
 }

@@ -18,6 +18,15 @@ precision_metrics <- c("determinability", "repeatability", "reproducibility")
 
 #' Get a sample-type precision rule.
 #'
+#' If no rule is defined for `sample_type` at `analysis_temperature_c` (for
+#' the given `metric`), this falls back to the `"unlisted"` rule set (ASTM
+#' D445-26 12.4.1/11.2.4 fallback limits for materials/temperatures not
+#' explicitly tabulated in Section 17), rather than raising an error. A rule
+#' that exists but is marked unverified (`coefficient_a` is `NA`) is not
+#' silently replaced by the fallback -- that still errors, since transcription
+#' of that cell could not be confirmed and using the "unlisted" limit in its
+#' place could mask an ASTM-defined value that differs from the fallback.
+#'
 #' @param sample_type Sample type label (see `.default_sample_rules()` for the
 #'   supported identifiers drawn from ASTM D445-26 17.1.1, 17.1.2, 17.2.1, and
 #'   17.2.2).
@@ -42,19 +51,27 @@ get_sample_type_rule <- function(
   db <- reference_db_connection()
   on.exit(DBI::dbDisconnect(db), add = TRUE)
 
-  result <- DBI::dbGetQuery(
-    db,
-    "SELECT * FROM sample_types
-     WHERE sample_type = ? AND metric = ?
-       AND ? >= temp_min_c AND ? <= temp_max_c
-     LIMIT 1",
-    params = list(
-      sample_type,
-      metric,
-      analysis_temperature_c,
-      analysis_temperature_c
+  fetch_rule <- function(type) {
+    DBI::dbGetQuery(
+      db,
+      "SELECT * FROM sample_types
+       WHERE sample_type = ? AND metric = ?
+         AND ? >= temp_min_c AND ? <= temp_max_c
+       LIMIT 1",
+      params = list(
+        type,
+        metric,
+        analysis_temperature_c,
+        analysis_temperature_c
+      )
     )
-  )
+  }
+
+  result <- fetch_rule(sample_type)
+
+  if (nrow(result) == 0 && sample_type != "unlisted") {
+    result <- fetch_rule("unlisted")
+  }
 
   if (nrow(result) == 0) {
     cli::cli_abort(c(

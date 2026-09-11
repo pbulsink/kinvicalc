@@ -100,7 +100,7 @@ resolve_calibration_factor <- function(
 list_viscometers <- function() {
   db <- reference_db_connection()
   on.exit(DBI::dbDisconnect(db), add = TRUE)
-  query <- "SELECT * FROM viscometers ORDER BY viscometer_id"
+  query <- "SELECT viscometer_id, viscometer_size, serial_number, status, factor_40_top, factor_40_bottom, factor_100_top, factor_100_bottom, use_count_since_cleaning, total_use_count, last_deep_cleaned_at, archived_at, added_by, notes, created_at, updated_at FROM viscometers ORDER BY viscometer_id"
   tibble::as_tibble(DBI::dbGetQuery(db, query))
 }
 
@@ -147,7 +147,7 @@ get_viscometer <- function(viscometer_id) {
 
   result <- DBI::dbGetQuery(
     db,
-    "SELECT * FROM viscometers WHERE viscometer_id = ?",
+    "SELECT viscometer_id, viscometer_size, serial_number, status, factor_40_top, factor_40_bottom, factor_100_top, factor_100_bottom, use_count_since_cleaning, total_use_count, last_deep_cleaned_at, archived_at, added_by, notes, created_at, updated_at FROM viscometers WHERE viscometer_id = ?",
     params = list(viscometer_id)
   )
 
@@ -178,6 +178,12 @@ add_viscometer <- function(viscometer) {
   db <- reference_db_connection()
   on.exit(DBI::dbDisconnect(db), add = TRUE)
 
+  viscometer$viscometer_id <- format_viscometer_id(
+    viscometer$viscometer_size[1],
+    viscometer$serial_number[1],
+    fn = "add_viscometer"
+  )
+
   existing <- DBI::dbGetQuery(
     db,
     "SELECT 1 FROM viscometers WHERE viscometer_id = ?",
@@ -185,58 +191,36 @@ add_viscometer <- function(viscometer) {
   )
 
   if (nrow(existing) > 0) {
-    DBI::dbExecute(
-      db,
-      "UPDATE viscometers SET viscometer_size = ?, serial_number = ?, calibration_date = ?, status = ?, factor_40_top = ?, factor_40_bottom = ?, factor_100_top = ?, factor_100_bottom = ?, updated_at = CURRENT_TIMESTAMP, added_by = COALESCE(?, added_by), notes = COALESCE(?, notes) WHERE viscometer_id = ?",
-      params = list(
-        viscometer$viscometer_size[1],
-        as.character(viscometer$serial_number[1]),
-        as.character(viscometer$calibration_date[1]),
-        viscometer$status[1],
-        viscometer$factor_40_top[1],
-        viscometer$factor_40_bottom[1],
-        viscometer$factor_100_top[1],
-        viscometer$factor_100_bottom[1],
-        if ("added_by" %in% names(viscometer)) {
-          viscometer$added_by[1]
-        } else {
-          NA_character_
-        },
-        if ("notes" %in% names(viscometer)) {
-          viscometer$notes[1]
-        } else {
-          NA_character_
-        },
-        viscometer$viscometer_id[1]
-      )
-    )
-  } else {
-    DBI::dbExecute(
-      db,
-      "INSERT INTO viscometers (viscometer_id, viscometer_size, serial_number, calibration_date, status, factor_40_top, factor_40_bottom, factor_100_top, factor_100_bottom, use_count_since_cleaning, total_use_count, last_deep_cleaned_at, added_by, notes, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 0, NULL, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)",
-      params = list(
-        viscometer$viscometer_id[1],
-        viscometer$viscometer_size[1],
-        as.character(viscometer$serial_number[1]),
-        as.character(viscometer$calibration_date[1]),
-        viscometer$status[1],
-        viscometer$factor_40_top[1],
-        viscometer$factor_40_bottom[1],
-        viscometer$factor_100_top[1],
-        viscometer$factor_100_bottom[1],
-        if ("added_by" %in% names(viscometer)) {
-          viscometer$added_by[1]
-        } else {
-          NA_character_
-        },
-        if ("notes" %in% names(viscometer)) {
-          viscometer$notes[1]
-        } else {
-          NA_character_
-        }
-      )
-    )
+    cli::cli_abort(c(
+      "{.fn add_viscometer}: viscometer {.val {viscometer$viscometer_id[1]}} already exists.",
+      "i" = "Each viscometer ID (derived from size and serial number) must be unique in the registry."
+    ))
   }
+
+  DBI::dbExecute(
+    db,
+    "INSERT INTO viscometers (viscometer_id, viscometer_size, serial_number, status, factor_40_top, factor_40_bottom, factor_100_top, factor_100_bottom, use_count_since_cleaning, total_use_count, last_deep_cleaned_at, added_by, notes, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, 0, NULL, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)",
+    params = list(
+      viscometer$viscometer_id[1],
+      viscometer$viscometer_size[1],
+      as.character(viscometer$serial_number[1]),
+      viscometer$status[1],
+      viscometer$factor_40_top[1],
+      viscometer$factor_40_bottom[1],
+      viscometer$factor_100_top[1],
+      viscometer$factor_100_bottom[1],
+      if ("added_by" %in% names(viscometer)) {
+        viscometer$added_by[1]
+      } else {
+        NA_character_
+      },
+      if ("notes" %in% names(viscometer)) {
+        viscometer$notes[1]
+      } else {
+        NA_character_
+      }
+    )
+  )
 
   get_viscometer(viscometer$viscometer_id[1])
 }

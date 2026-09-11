@@ -1,10 +1,8 @@
-test_that("app_server renders, calculates, and locks results (#noissue)", {
+test_that("app_server renders, calculates, and locks results ", {
   with_test_reference_db({
     viscometer <- tibble::tibble(
-      viscometer_id = "014-00014",
       viscometer_size = 14,
       serial_number = "00014",
-      calibration_date = as.Date("2024-12-14"),
       status = "active",
       factor_40_top = 0.025,
       factor_40_bottom = 0.025,
@@ -14,31 +12,38 @@ test_that("app_server renders, calculates, and locks results (#noissue)", {
     add_test_viscometer(viscometer)
 
     shiny::testServer(kinvicalc:::app_server, {
-      expect_match(output$result, "No result yet.", fixed = TRUE)
+      expect_true(grepl(
+        "No result yet",
+        as.character(output$result$html),
+        fixed = TRUE
+      ))
 
-      expect_warning(
-        {
-          session$setInputs(
-            viscometer_id = "014-00014",
-            sample_type = "base_oil",
-            analysis_temperature_c = 40,
-            time_1 = 150,
-            time_2 = 151,
-            calculate = 1
-          )
-          session$flushReact()
-        },
-        "determinability check failed"
+      session$setInputs(
+        user_id = "tester",
+        sample_id = "sample-001",
+        viscometer_id = "014-00014",
+        sample_type = "base_oil",
+        analysis_temperature_c = 40,
+        time_1 = 150,
+        time_2 = 151
       )
+      session$flushReact()
 
-      expect_true(grepl("Viscosity:", output$result, fixed = TRUE))
-      expect_true(grepl("FLAGGED:", output$result, fixed = TRUE))
+      rendered <- as.character(output$result$html)
+      expect_true(grepl("Viscosity 1", rendered, fixed = TRUE))
+      expect_true(grepl("FLAGGED", rendered, fixed = TRUE))
+      expect_true(grepl(
+        "Determinability failed",
+        as.character(output$calc_message$html),
+        fixed = TRUE
+      ))
 
       session$setInputs(lock = 1)
       session$flushReact()
 
-      expect_true(grepl("Viscosity:", output$result, fixed = TRUE))
-      expect_true(grepl("FLAGGED:", output$result, fixed = TRUE))
+      rendered <- as.character(output$result$html)
+      expect_true(grepl("Viscosity 1", rendered, fixed = TRUE))
+      expect_true(grepl("FLAGGED", rendered, fixed = TRUE))
 
       summary <- get_viscometer_use_summary("014-00014")
       expect_equal(summary$use_count_since_cleaning[1], 1)
@@ -47,13 +52,11 @@ test_that("app_server renders, calculates, and locks results (#noissue)", {
   })
 })
 
-test_that("app_server supports viscometer maintenance actions (#noissue)", {
+test_that("app_server supports viscometer maintenance actions ", {
   with_test_reference_db({
     viscometer <- tibble::tibble(
-      viscometer_id = "015-00015",
       viscometer_size = 15,
       serial_number = "00015",
-      calibration_date = as.Date("2025-01-15"),
       status = "active",
       factor_40_top = 0.03,
       factor_40_bottom = 0.03,
@@ -64,10 +67,17 @@ test_that("app_server supports viscometer maintenance actions (#noissue)", {
 
     shiny::testServer(kinvicalc:::app_server, {
       session$setInputs(
-        new_viscometer_id = "016-00016",
         new_viscometer_size = 16,
-        new_serial_number = "00016",
-        new_calibration_date = as.Date("2025-02-16"),
+        new_serial_number = "00016"
+      )
+      session$flushReact()
+      expect_match(
+        as.character(output$new_viscometer_id_preview$html),
+        "016-00016",
+        fixed = TRUE
+      )
+
+      session$setInputs(
         new_factor_40_top = 0.04,
         new_factor_40_bottom = 0.04,
         new_factor_100_top = 0.05,
@@ -79,7 +89,7 @@ test_that("app_server supports viscometer maintenance actions (#noissue)", {
       session$flushReact()
 
       expect_match(
-        output$maintenance_status,
+        as.character(output$maintenance_status$html),
         "Added viscometer 016-00016.",
         fixed = TRUE
       )
@@ -91,7 +101,7 @@ test_that("app_server supports viscometer maintenance actions (#noissue)", {
       session$flushReact()
 
       expect_match(
-        output$maintenance_status,
+        as.character(output$maintenance_status$html),
         "Marked viscometer 016-00016 as cleaned.",
         fixed = TRUE
       )
@@ -106,7 +116,7 @@ test_that("app_server supports viscometer maintenance actions (#noissue)", {
       )
       session$flushReact()
       expect_match(
-        output$maintenance_status,
+        as.character(output$maintenance_status$html),
         "Archived viscometer 016-00016.",
         fixed = TRUE
       )
@@ -118,7 +128,7 @@ test_that("app_server supports viscometer maintenance actions (#noissue)", {
       )
       session$flushReact()
       expect_match(
-        output$maintenance_status,
+        as.character(output$maintenance_status$html),
         "Unarchived viscometer 016-00016.",
         fixed = TRUE
       )

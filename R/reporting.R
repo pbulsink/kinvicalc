@@ -31,8 +31,32 @@ render_primary_report <- function(result, output_path = NULL, digits = 5) {
       ""
     }
 
+    sample_id_note <- if (
+      !is.null(result$sample_id) && !is.na(result$sample_id)
+    ) {
+      sprintf("<p>Sample: %s</p>", result$sample_id)
+    } else {
+      ""
+    }
+    operator_note <- if (!is.null(result$operator) && !is.na(result$operator)) {
+      sprintf("<p>Operator: %s</p>", result$operator)
+    } else {
+      ""
+    }
+    created_at_note <- if (!is.null(result$created_at)) {
+      sprintf(
+        "<p>Date/time: %s</p>",
+        format(result$created_at, "%Y-%m-%d %H:%M:%S")
+      )
+    } else {
+      ""
+    }
+
     html <- paste0(
       "<html><body><h1>Primary Sample Report (intermediate)</h1>",
+      sample_id_note,
+      operator_note,
+      created_at_note,
       sprintf("<p>Viscometer: %s</p>", result$viscometer_id),
       sprintf(
         "<p>Sample type: %s</p>",
@@ -43,7 +67,7 @@ render_primary_report <- function(result, output_path = NULL, digits = 5) {
         format_significant(result$analysis_temperature_c, digits)
       ),
       sprintf(
-        "<p>Viscosity: %s mm2/s</p>",
+        "<p>Viscosity: %s mm\u00B2/s</p>",
         format_significant(result$kinematic_viscosity_cSt, digits)
       ),
       sprintf("<p>Determinability: %s</p>", result$determinability_result),
@@ -92,8 +116,13 @@ render_high_density_report <- function(
           ""
         }
         sprintf(
-          "%s, %s, %s \u00b0C, %s, %s%s",
+          "%s, %s, %s, %s \u00b0C, %s, %s%s",
           x$viscometer_id,
+          if (!is.null(x$sample_id) && !is.na(x$sample_id)) {
+            x$sample_id
+          } else {
+            "(no sample id)"
+          },
           format_sample_type_label(x$sample_type),
           format_significant(x$analysis_temperature_c, digits),
           format_significant(x$kinematic_viscosity_cSt, digits),
@@ -141,6 +170,8 @@ session_results_table <- function(results) {
 
   rows <- lapply(results, function(x) {
     tibble::tibble(
+      operator = if (!is.null(x$operator)) x$operator else NA_character_,
+      sample_id = if (!is.null(x$sample_id)) x$sample_id else NA_character_,
       viscometer_id = x$viscometer_id,
       sample_type = x$sample_type,
       analysis_temperature_c = x$analysis_temperature_c,
@@ -149,7 +180,8 @@ session_results_table <- function(results) {
       viscosity = x$kinematic_viscosity_cSt,
       low_flow_time_flag = isTRUE(x$low_flow_time_flag),
       determinability = x$determinability_result,
-      locked = isTRUE(x$locked)
+      locked = isTRUE(x$locked),
+      created_at = if (!is.null(x$created_at)) x$created_at else as.POSIXct(NA)
     )
   })
 

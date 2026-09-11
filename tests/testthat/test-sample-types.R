@@ -45,6 +45,45 @@ test_that("unlisted materials fall back to the standard's estimate", {
   expect_equal(out$limit, 0.010 * mean(c(50, 50.4)))
 })
 
+test_that("get_sample_type_rule falls back to the unlisted rule instead of erroring", {
+  # "unknown_material" has no rows in the sample_types table at all, but
+  # determinability has "unlisted" rows covering 15-100 C (D445-26 12.4.1).
+  out <- get_sample_type_rule(
+    "unknown_material",
+    40,
+    metric = "determinability"
+  )
+  expect_equal(out$sample_type[1], "unlisted")
+  expect_equal(out$coefficient_a[1], 0.010)
+
+  det <- evaluate_determinability("unknown_material", 40, 50, 50.4)
+  expect_equal(det$limit, 0.010 * mean(c(50, 50.4)))
+})
+
+test_that("get_sample_type_rule fallback still respects unverified unlisted cells", {
+  # If even the "unlisted" fallback itself is unverified for a metric/temp
+  # (as seeded directly, bypassing add_sample_type_rule's validation which
+  # forbids NA coefficients), still error loudly rather than silently
+  # guessing.
+  db <- kinvicalc:::reference_db_connection()
+  on.exit(DBI::dbDisconnect(db), add = TRUE)
+  DBI::dbExecute(
+    db,
+    "INSERT INTO sample_types
+       (sample_type, metric, temp_min_c, temp_max_c, coefficient_a, exponent_b, offset, notes, created_at, updated_at)
+     VALUES ('unlisted', 'repeatability', 200, 200, NULL, 1, 0, 'intentionally unverified fallback for this test', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)"
+  )
+
+  expect_error(
+    get_sample_type_rule(
+      "totally_unknown_material",
+      200,
+      metric = "repeatability"
+    ),
+    "marked unverified"
+  )
+})
+
 test_that("repeatability and reproducibility use their own D445 tables", {
   rep_out <- evaluate_repeatability("base_oil", 40, 100, 100.9)
   repro_out <- evaluate_reproducibility("base_oil", 40, 100, 101.2)

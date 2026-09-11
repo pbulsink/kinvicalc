@@ -1,10 +1,8 @@
 # Shared validations and result assembly.
 
 viscometer_required_fields <- c(
-  "viscometer_id",
   "viscometer_size",
   "serial_number",
-  "calibration_date",
   "status",
   "factor_40_top",
   "factor_40_bottom",
@@ -45,33 +43,48 @@ validate_viscometer_record <- function(viscometer) {
     ))
   }
 
-  assert_string(
-    viscometer$viscometer_id[1],
-    "viscometer_id",
-    fn = "validate_viscometer_record"
-  )
-  if (!is_valid_viscometer_id(viscometer$viscometer_id[1])) {
-    cli::cli_abort(c(
-      "{.fn validate_viscometer_record}: {.arg viscometer_id} must match {.val ###-#####}.",
-      "i" = "Viscometers must be named {.val ###-#####} corresponding to size-serial number."
-    ))
-  }
-
   assert_scalar_numeric(
     viscometer$viscometer_size[1],
     "viscometer_size",
     fn = "validate_viscometer_record"
   )
+  if (
+    viscometer$viscometer_size[1] <= 0 ||
+      viscometer$viscometer_size[1] !=
+        as.integer(viscometer$viscometer_size[1]) ||
+      viscometer$viscometer_size[1] > 999
+  ) {
+    cli::cli_abort(c(
+      "{.fn validate_viscometer_record}: {.arg viscometer_size} must be an integer between 1 and 999.",
+      "i" = "Use the ASTM viscometer size number used to construct the three-digit ID prefix."
+    ))
+  }
+
   assert_string(
     viscometer$serial_number[1],
     "serial_number",
     fn = "validate_viscometer_record"
   )
-  assert_date(
-    viscometer$calibration_date[1],
-    "calibration_date",
+  expected_id <- format_viscometer_id(
+    viscometer_size = viscometer$viscometer_size[1],
+    serial_number = viscometer$serial_number[1],
     fn = "validate_viscometer_record"
   )
+  if (
+    "viscometer_id" %in%
+      names(viscometer) &&
+      !is.na(viscometer$viscometer_id[1])
+  ) {
+    if (!identical(viscometer$viscometer_id[1], expected_id)) {
+      cli::cli_abort(c(
+        "{.fn validate_viscometer_record}: {.arg viscometer_id} must match {.arg viscometer_size} and {.arg serial_number}.",
+        "i" = "Expected {.val {expected_id}} from the supplied size and serial number."
+      ))
+    }
+  } else {
+    viscometer$viscometer_id <- expected_id
+  }
+
   assert_string(
     viscometer$status[1],
     "status",
@@ -186,7 +199,10 @@ validate_sample_type_rule <- function(rule) {
 #'   flagged. Defaults to 200 s (ASTM D445-26 6.1.2/10.2); override with the
 #'   viscometer/size-specific minimum from Specifications D446 when it is
 #'   higher.
-#' @param operator Optional operator name.
+#' @param operator Optional operator/user identifier performing the
+#'   determination. Recorded on the result for traceability.
+#' @param sample_id Optional sample identifier/name being tested. Recorded on
+#'   the result for traceability.
 #' @param notes Optional notes.
 #' @return A list-like result object. If the determinability check fails,
 #'   the result is still returned (with `determinability_result == "fail"`)
@@ -201,6 +217,7 @@ build_sample_result <- function(
   time_2,
   min_flow_time_s = MIN_FLOW_TIME_S,
   operator = NA_character_,
+  sample_id = NA_character_,
   notes = NA_character_
 ) {
   viscometer <- get_viscometer(viscometer_id)
@@ -259,6 +276,7 @@ build_sample_result <- function(
     determinability_result = determinability$result,
     determinability_limit = round_half_even(determinability$limit),
     operator = operator,
+    sample_id = sample_id,
     notes = notes,
     created_at = Sys.time()
   )
@@ -266,8 +284,8 @@ build_sample_result <- function(
   if (!determinability$passed) {
     cli::cli_warn(c(
       "{.fn build_sample_result}: determinability check failed for viscometer {.val {viscometer_id}}.",
-      "*" = "Observed difference: {format_significant(determinability$difference)} mm2/s.",
-      "*" = "Determinability limit: {format_significant(determinability$limit)} mm2/s.",
+      "*" = "Observed difference: {format_significant(determinability$difference)} mm\u00B2/s.",
+      "*" = "Determinability limit: {format_significant(determinability$limit)} mm\u00B2/s.",
       "i" = "Per ASTM D445-26 11.2.3/12.4.1, repeat flow-time measurements after cleaning and drying the viscometer before reporting a final result."
     ))
   }
