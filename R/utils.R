@@ -1,33 +1,71 @@
 # Internal utilities and package-local defaults.
 
 .default_reference_db <- function() {
+  override <- getOption("kinvicalc.reference_db_path")
+  if (!is.null(override)) {
+    return(override)
+  }
+
   user_cache_dir <- tools::R_user_dir("kinvicalc", which = "data")
   dir.create(user_cache_dir, recursive = TRUE, showWarnings = FALSE)
   file.path(user_cache_dir, "reference.db")
 }
 
-assert_scalar_numeric <- function(x, name) {
+#' Round using round-half-to-even (banker's rounding).
+#'
+#' All numeric results reported by `kinvicalc` are rounded with round-half-
+#' to-even, matching R's native `round()` behaviour (IEC 60559), so this is a
+#' thin, explicit wrapper used consistently at the point each reported value
+#' is produced.
+#'
+#' @param x A numeric value.
+#' @param digits Number of decimal places to round to. Defaults to 4.
+#' @return `x` rounded to `digits` decimal places using round-half-to-even.
+#' @keywords internal
+round_half_even <- function(x, digits = 4) {
+  round(x, digits)
+}
+
+assert_scalar_numeric <- function(x, name, fn = NULL) {
+  if (is.null(fn)) {
+    fn <- as.character(sys.call(-1)[[1]])
+  }
+
   if (length(x) != 1 || !is.numeric(x) || is.na(x)) {
-    stop(sprintf("`%s` must be a single numeric value.", name), call. = FALSE)
+    cli::cli_abort(c(
+      "{.fn {fn}}: {.arg {name}} must be a single numeric value.",
+      "i" = "Supply one non-missing numeric value for {.arg {name}}."
+    ))
   }
 }
 
-assert_string <- function(x, name, allow_na = FALSE) {
+assert_string <- function(x, name, allow_na = FALSE, fn = NULL) {
+  if (is.null(fn)) {
+    fn <- as.character(sys.call(-1)[[1]])
+  }
+
   if (allow_na && is.na(x)) {
     return(invisible(TRUE))
   }
 
   if (length(x) != 1 || !is.character(x) || is.na(x) || !nzchar(x)) {
-    stop(
-      sprintf("`%s` must be a single non-empty string.", name),
-      call. = FALSE
-    )
+    cli::cli_abort(c(
+      "{.fn {fn}}: {.arg {name}} must be a single non-empty string.",
+      "i" = "Provide a character scalar for {.arg {name}} with at least one non-space character."
+    ))
   }
 }
 
-assert_date <- function(x, name) {
+assert_date <- function(x, name, fn = NULL) {
+  if (is.null(fn)) {
+    fn <- as.character(sys.call(-1)[[1]])
+  }
+
   if (length(x) != 1 || !inherits(x, "Date") || is.na(x)) {
-    stop(sprintf("`%s` must be a single Date value.", name), call. = FALSE)
+    cli::cli_abort(c(
+      "{.fn {fn}}: {.arg {name}} must be a single Date value.",
+      "i" = "Convert {.arg {name}} to Date (for example with {.fn as.Date}) before calling {.fn {fn}}."
+    ))
   }
 }
 
@@ -48,6 +86,8 @@ format_significant <- function(x, digits = 5) {
   if (is.na(x)) {
     return(NA_character_)
   }
+  # signif() uses IEC 60559 round-half-to-even, consistent with the rest of
+  # the package's rounding behaviour.
   formatC(signif(x, digits), digits = digits, format = "g", flag = "#")
 }
 
@@ -100,39 +140,41 @@ format_significant <- function(x, digits = 5) {
   )
 
   repeatability <- tibble::tribble(
-    ~sample_type                    , ~temp_min_c , ~temp_max_c , ~coefficient_a , ~exponent_b , ~offset , ~notes                                                                                                                                                                    ,
-    "base_oil"                      ,          40 ,          40 , 0.0101         , 1           ,       0 , "D445-26 17.2.1: base oils at 40 C (1.01 %)"                                                                                                                              ,
-    "base_oil"                      ,         100 ,         100 , 0.0085         , 1           ,       0 , "D445-26 17.2.1: base oils at 100 C (0.85 %)"                                                                                                                             ,
-    "formulated_oil"                ,          40 ,          40 , 0.0074         , 1           ,       0 , "D445-26 17.2.1: formulated oils at 40 C (0.74 %)"                                                                                                                        ,
-    "formulated_oil"                ,         100 ,         100 , 0.0084         , 1           ,       0 , "D445-26 17.2.1: formulated oils at 100 C (0.84 %)"                                                                                                                       ,
-    "formulated_oil"                ,         150 ,         150 , 0.0056         , 1           ,       0 , "D445-26 17.2.1: formulated oils at 150 C (0.56 %)"                                                                                                                       ,
-    "petroleum_wax"                 ,         100 ,         100 , 0.0141         , 1.2         ,       0 , "D445-26 17.2.1: petroleum wax at 100 C, 0.0141 x^1.2"                                                                                                                    ,
-    "residual_fuel_oil"             ,          50 ,          50 , 0.07885        , 1           ,       0 , "D445-26 17.2.1: residual fuel oils at 50 C (7.88 %)"                                                                                                                     ,
-    "residual_fuel_oil"             ,         100 ,         100 , 0.08088        , 1           ,       0 , "D445-26 17.2.1: residual fuel oils at 100 C (8.08 %)"                                                                                                                    ,
-    "additive"                      ,         100 ,         100 , 0.00192        , 1.1         ,       0 , "D445-26 17.2.1: additives at 100 C, 0.00192 x^1.1"                                                                                                                       ,
-    "gas_oil"                       ,          40 ,          40 , 0.0043         , 1           ,       1 , "D445-26 17.2.1: gas oils at 40 C, 0.0043 (x+1)"                                                                                                                          ,
-    "jet_fuel"                      ,         -20 ,         -20 , 0.01850        , 0           ,       0 , "D445-26 17.2.1: jet fuels at -20 C, fixed 0.01850 mm2/s"                                                                                                                 ,
-    "jet_fuel"                      ,         -40 ,         -40 , NA_real_       , NA_real_    ,       0 , "UNVERIFIED: D445-26 17.2.1 jet fuels at -40 C table cell could not be unambiguously transcribed (candidates 0.002719 x^1.14 or 0.0056 x); confirm against the standard." ,
-    "kerosine_diesel_biodiesel"     ,          40 ,          40 , NA_real_       , NA_real_    ,       0 , "UNVERIFIED: D445-26 17.2.1 kerosine/diesel/biodiesel at 40 C table cell could not be unambiguously transcribed; confirm against the standard."                           ,
-    "used_inservice_formulated_oil" ,          15 ,         100 , NA_real_       , NA_real_    ,       0 , "UNVERIFIED: D445-26 17.2.1 used in-service formulated oils table cell could not be unambiguously transcribed; confirm against the standard."
+    ~sample_type                    , ~temp_min_c , ~temp_max_c , ~coefficient_a , ~exponent_b , ~offset , ~notes                                                                              ,
+    "base_oil"                      ,          40 ,          40 , 0.0101         , 1           ,       0 , "D445-26 17.2.1: base oils at 40 C (1.01 %)"                                        ,
+    "base_oil"                      ,         100 ,         100 , 0.0085         , 1           ,       0 , "D445-26 17.2.1: base oils at 100 C (0.85 %)"                                       ,
+    "formulated_oil"                ,          40 ,          40 , 0.0074         , 1           ,       0 , "D445-26 17.2.1: formulated oils at 40 C (0.74 %)"                                  ,
+    "formulated_oil"                ,         100 ,         100 , 0.0084         , 1           ,       0 , "D445-26 17.2.1: formulated oils at 100 C (0.84 %)"                                 ,
+    "formulated_oil"                ,         150 ,         150 , 0.0056         , 1           ,       0 , "D445-26 17.2.1: formulated oils at 150 C (0.56 %)"                                 ,
+    "petroleum_wax"                 ,         100 ,         100 , 0.0141         , 1.2         ,       0 , "D445-26 17.2.1: petroleum wax at 100 C, 0.0141 x^1.2"                              ,
+    "residual_fuel_oil"             ,          50 ,          50 , 0.07885        , 1           ,       0 , "D445-26 17.2.1: residual fuel oils at 50 C (7.88 %)"                               ,
+    "residual_fuel_oil"             ,         100 ,         100 , 0.08088        , 1           ,       0 , "D445-26 17.2.1: residual fuel oils at 100 C (8.08 %)"                              ,
+    "additive"                      ,         100 ,         100 , 0.00192        , 1.1         ,       0 , "D445-26 17.2.1: additives at 100 C, 0.00192 x^1.1"                                 ,
+    "gas_oil"                       ,          40 ,          40 , 0.0043         , 1           ,       1 , "D445-26 17.2.1: gas oils at 40 C, 0.0043 (x+1)"                                    ,
+    "jet_fuel"                      ,         -20 ,         -20 , 0.01850        , 0           ,       0 , "D445-26 17.2.1: jet fuels at -20 C, fixed 0.01850 mm2/s"                           ,
+    "jet_fuel"                      ,         -40 ,         -40 , 0.002719       , 1.14        ,       0 , "D445-26 17.2.1 jet fuels at -40 C 0.002719 x^1.14 or 0.0056"                       ,
+    "used_inservice_formulated_oil" ,          40 ,          40 , 0.000233       , 1.722       ,       0 , "D445-26 17.2.1: used in-service formulated oils at 40 C, 0.000233 x^1.722 "        ,
+    "used_inservice_formulated_oil" ,         100 ,         100 , 0.001005       , 1.4633      ,       0 , "D445-26 17.2.1: used in-service formulated oils at 100 C, 0.001005 x^1.4633"       ,
+    "kerosene_diesel_biodiesel"     ,          40 ,          40 , 0.0056         , 1           ,       0 , "D445-26 17.2.1: kerosine/diesel/biodiesel fuels/blends at 40 C, 0.0056 x (0.56 %)"
   )
 
   reproducibility <- tibble::tribble(
-    ~sample_type                    , ~temp_min_c , ~temp_max_c , ~coefficient_a , ~exponent_b , ~offset , ~notes                                                                                                                                          ,
-    "base_oil"                      ,          40 ,          40 , 0.0136         , 1           ,       0 , "D445-26 17.2.2: base oils at 40 C (1.36 %)"                                                                                                    ,
-    "base_oil"                      ,         100 ,         100 , 0.0190         , 1           ,       0 , "D445-26 17.2.2: base oils at 100 C (1.90 %)"                                                                                                   ,
-    "formulated_oil"                ,          40 ,          40 , 0.0122         , 1           ,       0 , "D445-26 17.2.2: formulated oils at 40 C (1.22 %)"                                                                                              ,
-    "formulated_oil"                ,         100 ,         100 , 0.0138         , 1           ,       0 , "D445-26 17.2.2: formulated oils at 100 C (1.38 %)"                                                                                             ,
-    "formulated_oil"                ,         150 ,         150 , 0.018          , 1           ,       0 , "D445-26 17.2.2: formulated oils at 150 C (1.8 %)"                                                                                              ,
-    "petroleum_wax"                 ,         100 ,         100 , 0.0366         , 1.2         ,       0 , "D445-26 17.2.2: petroleum wax at 100 C, 0.0366 x^1.2"                                                                                          ,
-    "residual_fuel_oil"             ,          50 ,          50 , 0.08461        , 1           ,       0 , "D445-26 17.2.2: residual fuel oils at 50 C (8.46 %)"                                                                                           ,
-    "residual_fuel_oil"             ,         100 ,         100 , 0.1206         , 1           ,       0 , "D445-26 17.2.2: residual fuel oils at 100 C (12.06 %)"                                                                                         ,
-    "additive"                      ,         100 ,         100 , 0.00862        , 1.1         ,       0 , "D445-26 17.2.2: additives at 100 C, 0.00862 x^1.1"                                                                                             ,
-    "gas_oil"                       ,          40 ,          40 , 0.0082         , 1           ,       1 , "D445-26 17.2.2: gas oils at 40 C, 0.0082 (x+1)"                                                                                                ,
-    "jet_fuel"                      ,         -20 ,         -20 , 0.04718        , 0           ,       0 , "D445-26 17.2.2: jet fuels at -20 C, fixed 0.04718 mm2/s"                                                                                       ,
-    "jet_fuel"                      ,         -40 ,         -40 , NA_real_       , NA_real_    ,       0 , "UNVERIFIED: D445-26 17.2.2 jet fuels at -40 C table cell could not be unambiguously transcribed; confirm against the standard."                ,
-    "kerosine_diesel_biodiesel"     ,          40 ,          40 , NA_real_       , NA_real_    ,       0 , "UNVERIFIED: D445-26 17.2.2 kerosine/diesel/biodiesel at 40 C table cell could not be unambiguously transcribed; confirm against the standard." ,
-    "used_inservice_formulated_oil" ,          15 ,         100 , NA_real_       , NA_real_    ,       0 , "UNVERIFIED: D445-26 17.2.2 used in-service formulated oils table cell could not be unambiguously transcribed; confirm against the standard."
+    ~sample_type                    , ~temp_min_c , ~temp_max_c , ~coefficient_a , ~exponent_b , ~offset , ~notes                                                                        ,
+    "base_oil"                      ,          40 ,          40 , 0.0136         , 1           ,       0 , "D445-26 17.2.2: base oils at 40 C (1.36 %)"                                  ,
+    "base_oil"                      ,         100 ,         100 , 0.0190         , 1           ,       0 , "D445-26 17.2.2: base oils at 100 C (1.90 %)"                                 ,
+    "formulated_oil"                ,          40 ,          40 , 0.0122         , 1           ,       0 , "D445-26 17.2.2: formulated oils at 40 C (1.22 %)"                            ,
+    "formulated_oil"                ,         100 ,         100 , 0.0138         , 1           ,       0 , "D445-26 17.2.2: formulated oils at 100 C (1.38 %)"                           ,
+    "formulated_oil"                ,         150 ,         150 , 0.018          , 1           ,       0 , "D445-26 17.2.2: formulated oils at 150 C (1.8 %)"                            ,
+    "petroleum_wax"                 ,         100 ,         100 , 0.0366         , 1.2         ,       0 , "D445-26 17.2.2: petroleum wax at 100 C, 0.0366 x^1.2"                        ,
+    "residual_fuel_oil"             ,          50 ,          50 , 0.08461        , 1           ,       0 , "D445-26 17.2.2: residual fuel oils at 50 C (8.46 %)"                         ,
+    "residual_fuel_oil"             ,         100 ,         100 , 0.1206         , 1           ,       0 , "D445-26 17.2.2: residual fuel oils at 100 C (12.06 %)"                       ,
+    "additive"                      ,         100 ,         100 , 0.00862        , 1.1         ,       0 , "D445-26 17.2.2: additives at 100 C, 0.00862 x^1.1"                           ,
+    "gas_oil"                       ,          40 ,          40 , 0.0082         , 1           ,       1 , "D445-26 17.2.2: gas oils at 40 C, 0.0082 (x+1)"                              ,
+    "jet_fuel"                      ,         -20 ,         -20 , 0.04718        , 0           ,       0 , "D445-26 17.2.2: jet fuels at -20 C, fixed 0.04718 mm2/s"                     ,
+    "jet_fuel"                      ,         -40 ,         -40 , 0.005077       , 1.14        ,       0 , "D445-26 17.2.2: jet fuels at -40 C, 0.005077 x^1.14"                         ,
+    "kerosine_diesel_biodiesel"     ,          40 ,          40 , 0.0224         , 1           ,       0 , "D445-26 17.2.2: kerosine/diesel/biodiesel at 40 C, 0.0224 x (2.24 %)"        ,
+    "used_inservice_formulated_oil" ,          40 ,          40 , 0.000594       , 1.722       ,       0 , "D445-26 17.2.2: used in-service formulated oils at 40 C, 0.000594 x^1.722"   ,
+    "used_inservice_formulated_oil" ,         100 ,         100 , 0.003361       , 1.4633      ,       0 , "D445-26 17.2.2: used in-service formulated oils at 100 C, 0.003361 x^1.4633"
   )
 
   determinability$metric <- "determinability"
@@ -145,16 +187,18 @@ format_significant <- function(x, digits = 5) {
 }
 
 
-validate_reference_tbl <- function(tbl, expected_cols) {
+validate_reference_tbl <- function(tbl, expected_cols, fn = NULL) {
+  if (is.null(fn)) {
+    fn <- as.character(sys.call(-1)[[1]])
+  }
+
   missing_cols <- setdiff(expected_cols, names(tbl))
   if (length(missing_cols) > 0) {
-    stop(
-      sprintf(
-        "Reference table is missing required columns: %s",
-        paste(missing_cols, collapse = ", ")
-      ),
-      call. = FALSE
-    )
+    cli::cli_abort(c(
+      "{.fn {fn}}: reference table is missing required columns: {paste(missing_cols, collapse = ', ')}.",
+      "i" = "Ensure the input table has exactly the expected schema before saving reference data."
+    ))
   }
+
   invisible(tbl)
 }

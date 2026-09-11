@@ -18,12 +18,15 @@
 #' @export
 render_primary_report <- function(result, output_path = NULL, digits = 5) {
   if (is.null(result) || !inherits(result, "kinvicalc_result")) {
-    stop("`result` must be a result created by `build_sample_result()`.", call. = FALSE)
+    cli::cli_abort(c(
+      "{.fn render_primary_report}: {.arg result} must be created by {.fn build_sample_result}.",
+      "i" = "Pass a kinvicalc result object returned by {.fn build_sample_result}."
+    ))
   }
 
   if (!is.null(output_path)) {
-    ke_note <- if (isTRUE(result$kinetic_energy_correction_applied)) {
-      "<p>Kinetic energy correction applied (flow time below 200 s).</p>"
+    low_time_note <- if (isTRUE(result$low_flow_time_flag)) {
+      "<p><strong>Flagged:</strong> flow time below 200 s -- review measurement (ASTM D445-26 6.1.2/10.2).</p>"
     } else {
       ""
     }
@@ -32,10 +35,16 @@ render_primary_report <- function(result, output_path = NULL, digits = 5) {
       "<html><body><h1>Primary Sample Report (intermediate)</h1>",
       sprintf("<p>Viscometer: %s</p>", result$viscometer_id),
       sprintf("<p>Sample type: %s</p>", result$sample_type),
-      sprintf("<p>Temperature: %s C</p>", format_significant(result$analysis_temperature_c, digits)),
-      sprintf("<p>Viscosity: %s mm2/s</p>", format_significant(result$kinematic_viscosity_cSt, digits)),
+      sprintf(
+        "<p>Temperature: %s C</p>",
+        format_significant(result$analysis_temperature_c, digits)
+      ),
+      sprintf(
+        "<p>Viscosity: %s mm2/s</p>",
+        format_significant(result$kinematic_viscosity_cSt, digits)
+      ),
       sprintf("<p>Determinability: %s</p>", result$determinability_result),
-      ke_note,
+      low_time_note,
       "</body></html>"
     )
     writeLines(html, con = output_path)
@@ -51,26 +60,46 @@ render_primary_report <- function(result, output_path = NULL, digits = 5) {
 #' @param digits Minimum significant figures to report (default 5).
 #' @return Invisibly the results list.
 #' @export
-render_high_density_report <- function(results, output_path = NULL, digits = 5) {
+render_high_density_report <- function(
+  results,
+  output_path = NULL,
+  digits = 5
+) {
   if (is.null(results) || length(results) == 0) {
-    stop("`results` must contain at least one result object.", call. = FALSE)
+    cli::cli_abort(c(
+      "{.fn render_high_density_report}: {.arg results} must contain at least one result object.",
+      "i" = "Provide a non-empty list of objects returned by {.fn build_sample_result}."
+    ))
   }
 
   if (!all(vapply(results, inherits, logical(1), "kinvicalc_result"))) {
-    stop("All elements of `results` must be result objects from `build_sample_result()`.", call. = FALSE)
+    cli::cli_abort(c(
+      "{.fn render_high_density_report}: all elements of {.arg results} must be objects from {.fn build_sample_result}.",
+      "i" = "Validate each list element before rendering and remove non-kinvicalc entries."
+    ))
   }
 
   if (!is.null(output_path)) {
-    table_lines <- vapply(results, function(x) {
-      sprintf(
-        "%s, %s, %s C, %s, %s",
-        x$viscometer_id,
-        x$sample_type,
-        format_significant(x$analysis_temperature_c, digits),
-        format_significant(x$kinematic_viscosity_cSt, digits),
-        x$determinability_result
-      )
-    }, character(1))
+    table_lines <- vapply(
+      results,
+      function(x) {
+        flag <- if (isTRUE(x$low_flow_time_flag)) {
+          " [FLAG: flow time < 200 s]"
+        } else {
+          ""
+        }
+        sprintf(
+          "%s, %s, %s C, %s, %s%s",
+          x$viscometer_id,
+          x$sample_type,
+          format_significant(x$analysis_temperature_c, digits),
+          format_significant(x$kinematic_viscosity_cSt, digits),
+          x$determinability_result,
+          flag
+        )
+      },
+      character(1)
+    )
     writeLines(table_lines, con = output_path)
   }
 
@@ -84,8 +113,13 @@ render_high_density_report <- function(results, output_path = NULL, digits = 5) 
 #' @export
 lock_result <- function(result) {
   if (is.null(result) || !inherits(result, "kinvicalc_result")) {
-    stop("`result` must be a result created by `build_sample_result()`.", call. = FALSE)
+    cli::cli_abort(c(
+      "{.fn lock_result}: {.arg result} must be created by {.fn build_sample_result}.",
+      "i" = "Only lock validated kinvicalc result objects."
+    ))
   }
+
+  increment_viscometer_use(result$viscometer_id)
 
   result$locked <- TRUE
   result$locked_at <- Sys.time()
@@ -102,19 +136,19 @@ session_results_table <- function(results) {
     return(tibble::tibble())
   }
 
-  tibble::as_tibble(
-    lapply(results, function(x) {
-      list(
-        viscometer_id = x$viscometer_id,
-        sample_type = x$sample_type,
-        analysis_temperature_c = x$analysis_temperature_c,
-        time_1 = x$time_1,
-        time_2 = x$time_2,
-        viscosity = x$kinematic_viscosity_cSt,
-        kinetic_energy_correction_applied = isTRUE(x$kinetic_energy_correction_applied),
-        determinability = x$determinability_result,
-        locked = isTRUE(x$locked)
-      )
-    })
-  )
+  rows <- lapply(results, function(x) {
+    tibble::tibble(
+      viscometer_id = x$viscometer_id,
+      sample_type = x$sample_type,
+      analysis_temperature_c = x$analysis_temperature_c,
+      time_1 = x$time_1,
+      time_2 = x$time_2,
+      viscosity = x$kinematic_viscosity_cSt,
+      low_flow_time_flag = isTRUE(x$low_flow_time_flag),
+      determinability = x$determinability_result,
+      locked = isTRUE(x$locked)
+    )
+  })
+
+  tibble::as_tibble(do.call(rbind, rows))
 }

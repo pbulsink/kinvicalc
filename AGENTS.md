@@ -11,7 +11,7 @@ R package implementing ASTM D445-26/D446-24 kinematic viscosity workflows for vi
 
 Provides calculation helpers, validation, persistence, and Shiny reporting for viscometer-based kinematic viscosity workflows.
 
-All calculation logic is documented against ASTM D445-26 (kinematic viscosity test method) and ASTM D446-24 (viscometer specifications). The two standards ship in the repo root as `D445-26.pdf` and `D446-24.pdf` — consult them when verifying equations or precision-table values, since roxygen comments cite specific sections throughout.
+All calculation logic is documented against ASTM D445-26 (kinematic viscosity test method) and ASTM D446-24 (viscometer specifications). If updating, check with the user for compliance to these standard tests and specifications. 
 
 ## Project Structure
 
@@ -19,7 +19,7 @@ No `.github/` CI workflows are currently configured.
 
 ### R/ (Source Code)
 - `app.R` - Shiny app entry point: two-flow-time measurement form, result rendering and locking
-- `calculation-core.R` - ASTM viscosity calculation with kinetic energy correction; SQLite reference DB connection, schema creation, and default-rule seeding
+- `calculation-core.R` - ASTM viscosity calculation (`nu = C * t`, no kinetic energy/E correction); SQLite reference DB connection, schema creation, and default-rule seeding
 - `data-models.R` - Required-field validation for viscometer/sample-rule records; assembles the `kinvicalc_result` object from two determinations plus the determinability check
 - `reporting.R` - Primary and high-density report rendering (HTML/text), session results table, result locking state
 - `sample-types.R` - Precision rule lookup/upsert and determinability/repeatability/reproducibility evaluation (D445-26 Section 17)
@@ -28,8 +28,8 @@ No `.github/` CI workflows are currently configured.
 
 ### tests/testthat/ (Unit Tests)
 testthat edition 3 (`Config/testthat/edition: 3`). Each test file matches the module it covers in `R/`:
-- `test-calculation-core.R` - viscosity above/below minimum flow time, kinetic energy correction errors and magnitude cap, calibration factor interpolation
-- `test-data-models.R` - end-to-end result assembly: determinability pass/fail, kinetic energy correction path, failure warning
+- `test-calculation-core.R` - viscosity above/below minimum flow time (flagged, not corrected), calibration factor interpolation, round-half-to-even rounding
+- `test-data-models.R` - end-to-end result assembly: determinability pass/fail, low-flow-time flagging, failure warning
 - `test-sample-types.R` - precision limits for all four formula forms (linear, offset, power-law, fixed), unverified-cell error, custom rule upsert/retrieval
 - `test-viscometer.R` - ID pattern validation, registry add/get/remove round trips
 
@@ -45,14 +45,19 @@ The package is organized as one file per capability area around a single local S
 | File | Role | Key Functions |
 |------|------|---------------|
 | `app.R` | Shiny UI and server for interactive measurement, calculation, and result locking | `run_app()` |
-| `calculation-core.R` | ASTM D445/D446 viscosity calculation (with kinetic energy correction) and SQLite reference DB access/initialization | `calculate_kinematic_viscosity()`, `save_reference_data()`, `load_reference_data()` |
+| `calculation-core.R` | ASTM D445/D446 viscosity calculation (`nu = C * t`, no kinetic energy/E correction) and SQLite reference DB access/initialization | `calculate_kinematic_viscosity()`, `save_reference_data()`, `load_reference_data()` |
 | `data-models.R` | Record validation and assembly of the result object from two determinations | `build_sample_result()`, `validate_viscometer_record()`, `validate_sample_type_rule()` |
 | `reporting.R` | Intermediate report rendering, session results table, and lock state (5 sig. figs default; round to 4 for final client reports per D445-26 15.1) | `render_primary_report()`, `render_high_density_report()`, `lock_result()`, `session_results_table()` |
 | `sample-types.R` | Precision rule management and the three ASTM precision evaluations, limit = a * (average + offset)^b | `get_sample_type_rule()`, `add_sample_type_rule()`, `evaluate_determinability()`, `evaluate_repeatability()`, `evaluate_reproducibility()` |
-| `utils.R` | Shared internal infrastructure; no exports (validators used across all modules) | internals: `.default_sample_rules()`, `.default_reference_db()`, `assert_scalar_numeric()`, `format_significant()` |
+| `utils.R` | Shared internal infrastructure; no exports (validators used across all modules) | internals: `.default_sample_rules()`, `.default_reference_db()`, `assert_scalar_numeric()`, `format_significant()`, `round_half_even()` |
 | `viscometer.R` | Viscometer registry CRUD and temperature-interpolated calibration factor resolution | `get_viscometer()`, `add_viscometer()`, `resolve_calibration_factor()`, `list_viscometers()`, `validate_viscometer()` |
 
 **Key data flow:** `build_sample_result()` is the main orchestrator — `get_viscometer()` -> `resolve_calibration_factor()` -> `calculate_kinematic_viscosity()` (twice, one per flow time) -> `evaluate_determinability()` -> `kinvicalc_result` object. The DB itself is opened by the internal `reference_db_connection()` (`R/calculation-core.R:120`), which auto-creates both tables at `tools::R_user_dir("kinvicalc", which = "data")/reference.db` and seeds `.default_sample_rules()` when the `sample_types` table is empty.
+
+**Rounding and flagging conventions:**
+- All reported numeric results use round-half-to-even (banker's rounding) via the internal `round_half_even()` helper in `R/utils.R`, which wraps base R's native `round()` (already IEC 60559 round-half-to-even). Apply it at the point each reported value is produced (viscosity, determinability difference/limit).
+- The package does **not** implement a kinetic energy (E) correction (D446-24 Eq 6/7). `calculate_kinematic_viscosity()` always uses `nu = C * t` and instead returns `low_flow_time_flag = TRUE` when `time_s < min_flow_time_s` (200 s default, per ASTM D445-26 6.1.2/10.2). Visual reports (`render_primary_report()`, `render_high_density_report()`, `session_results_table()`, and the Shiny app) surface this flag for operator review rather than silently correcting it.
+- Gravity correction is out of scope and must not be reintroduced; there is no gravitational-acceleration term anywhere in the calculation path.
 
 **Dependencies:**
 - **Imports:** bslib, DBI, RSQLite, shiny, tibble (plus base `tools` for the user data directory)

@@ -11,6 +11,7 @@ Encoding: UTF-8
 Roxygen: list(markdown = TRUE)
 Imports:
     bslib,
+    cli,
     DBI,
     shiny,
     tibble,

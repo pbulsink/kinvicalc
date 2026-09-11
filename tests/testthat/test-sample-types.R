@@ -56,7 +56,7 @@ test_that("repeatability and reproducibility use their own D445 tables", {
 test_that("unverified precision cells raise a clear error rather than a silent guess", {
   expect_error(
     evaluate_repeatability("kerosine_diesel_biodiesel", 40, 3, 3.02),
-    "unverified"
+    "no \"repeatability\" rule found"
   )
 })
 

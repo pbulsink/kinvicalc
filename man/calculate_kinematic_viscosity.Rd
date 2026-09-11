@@ -7,7 +7,6 @@
 calculate_kinematic_viscosity(
   time_s,
   factor,
-  kinetic_energy_factor = NA_real_,
   min_flow_time_s = MIN_FLOW_TIME_S
 )
 }
@@ -17,32 +16,21 @@ calculate_kinematic_viscosity(
 \item{factor}{Calibration constant (\code{C}) for the relevant viscometer, in
 mm2/s2.}
 
-\item{kinetic_energy_factor}{Kinetic energy factor \code{E}, in mm2 * s, used
-only when \code{time_s} is below \code{min_flow_time_s}. Required in that case;
-ignored otherwise.}
-
 \item{min_flow_time_s}{Minimum flow time, in seconds, below which the
-kinetic energy correction is required. Defaults to the general 200 s
-minimum from ASTM D445-26 6.1.2/10.2; pass the viscometer- or size-
-specific minimum from Specifications D446 when it differs (some sizes
-require 250 s, 300 s, 380 s, 600 s, or 1320 s -- see D446-24 Annexes
-A1-A3).}
+result is flagged. Defaults to the general 200 s minimum from ASTM
+D445-26 6.1.2/10.2; pass the viscometer- or size-specific minimum from
+Specifications D446 when it differs (some sizes require 250 s, 300 s,
+380 s, 600 s, or 1320 s -- see D446-24 Annexes A1-A3).}
 }
 \value{
 A list with the calculated kinematic viscosity (\code{viscosity}, in
-mm2/s), whether the kinetic energy correction was applied
-(\code{kinetic_energy_correction_applied}), the correction magnitude
-(\code{kinetic_energy_correction}, mm2/s), and the correction as a fraction of
-the calculated viscosity (\code{kinetic_energy_correction_fraction}).
+mm2/s) and whether the flow time is below the minimum
+(\code{low_flow_time_flag}).
 }
 \description{
 Implements the basic relationship of ASTM D445-26 Eq 2 / D446-24 Eq 5,
-\code{nu = C * t}, used whenever the flow time is long enough (>= 200 s, or the
-viscometer-specific minimum in Specifications D446) that the kinetic
-energy term is negligible. When \code{time_s} is below \code{min_flow_time_s}, the
-kinetic energy correction from D446-24 Eq 6, \code{nu = C*t - E/t^2}, is applied
-instead, and the kinetic energy factor, \code{kinetic_energy_factor}, must be
-supplied (mm2 * s) because it is viscometer- and geometry-specific and
-cannot be derived from the flow time and constant alone (D446-24 8.2.3,
-Eq 7).
+\code{nu = C * t}. No kinetic energy correction is applied by this package;
+instead, when \code{time_s} is below \code{min_flow_time_s}, the result is flagged
+(\code{low_flow_time_flag}) so it can be surfaced in reports for operator
+review, per ASTM D445-26 6.1.2/10.2.
 }

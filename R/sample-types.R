@@ -26,10 +26,18 @@ precision_metrics <- c("determinability", "repeatability", "reproducibility")
 #'   "repeatability", or "reproducibility".
 #' @return A one-row tibble for the requested rule.
 #' @export
-get_sample_type_rule <- function(sample_type, analysis_temperature_c = 40, metric = precision_metrics) {
+get_sample_type_rule <- function(
+  sample_type,
+  analysis_temperature_c = 40,
+  metric = precision_metrics
+) {
   metric <- match.arg(metric)
-  assert_string(sample_type, "sample_type")
-  assert_scalar_numeric(analysis_temperature_c, "analysis_temperature_c")
+  assert_string(sample_type, "sample_type", fn = "get_sample_type_rule")
+  assert_scalar_numeric(
+    analysis_temperature_c,
+    "analysis_temperature_c",
+    fn = "get_sample_type_rule"
+  )
 
   db <- reference_db_connection()
   on.exit(DBI::dbDisconnect(db), add = TRUE)
@@ -40,33 +48,26 @@ get_sample_type_rule <- function(sample_type, analysis_temperature_c = 40, metri
      WHERE sample_type = ? AND metric = ?
        AND ? >= temp_min_c AND ? <= temp_max_c
      LIMIT 1",
-    params = list(sample_type, metric, analysis_temperature_c, analysis_temperature_c)
+    params = list(
+      sample_type,
+      metric,
+      analysis_temperature_c,
+      analysis_temperature_c
+    )
   )
 
   if (nrow(result) == 0) {
-    stop(
-      sprintf(
-        "No %s rule found for sample type '%s' at %.1f C.",
-        metric, sample_type, analysis_temperature_c
-      ),
-      call. = FALSE
-    )
+    cli::cli_abort(c(
+      "{.fn get_sample_type_rule}: no {.val {metric}} rule found for sample type {.val {sample_type}} at {.val {analysis_temperature_c}} C.",
+      "i" = "Add or correct a rule with {.fn add_sample_type_rule} for this sample type, metric, and temperature range."
+    ))
   }
 
   if (is.na(result$coefficient_a[1])) {
-    stop(
-      sprintf(
-        paste(
-          "The %s rule for '%s' at %.1f C is recorded as unverified",
-          "(source values from ASTM D445-26 Section 17 could not be",
-          "reliably transcribed for this cell). Confirm the value against",
-          "the standard and update the rule with `add_sample_type_rule()`",
-          "before relying on it."
-        ),
-        metric, sample_type, analysis_temperature_c
-      ),
-      call. = FALSE
-    )
+    cli::cli_abort(c(
+      "{.fn get_sample_type_rule}: the {.val {metric}} rule for {.val {sample_type}} at {.val {analysis_temperature_c}} C is marked unverified.",
+      "i" = "Confirm the ASTM D445-26 Section 17 value and update the rule with {.fn add_sample_type_rule} before using this metric."
+    ))
   }
 
   tibble::as_tibble(result)
@@ -141,10 +142,18 @@ add_sample_type_rule <- function(rule) {
 #' @return The numeric precision limit, mm2/s.
 #' @keywords internal
 calculate_precision_limit <- function(rule, average_value) {
-  assert_scalar_numeric(average_value, "average_value")
+  assert_scalar_numeric(
+    average_value,
+    "average_value",
+    fn = "calculate_precision_limit"
+  )
   a <- rule$coefficient_a[1]
   b <- rule$exponent_b[1]
-  offset <- if ("offset" %in% names(rule) && !is.na(rule$offset[1])) rule$offset[1] else 0
+  offset <- if ("offset" %in% names(rule) && !is.na(rule$offset[1])) {
+    rule$offset[1]
+  } else {
+    0
+  }
   a * (average_value + offset)^b
 }
 
@@ -160,13 +169,34 @@ calculate_precision_limit <- function(rule, average_value) {
 #' @param viscosity_2 Second determined kinematic viscosity value, mm2/s.
 #' @return A list containing the difference, rule limit, and pass/fail status.
 #' @export
-evaluate_determinability <- function(sample_type, analysis_temperature_c, viscosity_1, viscosity_2) {
-  assert_string(sample_type, "sample_type")
-  assert_scalar_numeric(analysis_temperature_c, "analysis_temperature_c")
-  assert_scalar_numeric(viscosity_1, "viscosity_1")
-  assert_scalar_numeric(viscosity_2, "viscosity_2")
+evaluate_determinability <- function(
+  sample_type,
+  analysis_temperature_c,
+  viscosity_1,
+  viscosity_2
+) {
+  assert_string(sample_type, "sample_type", fn = "evaluate_determinability")
+  assert_scalar_numeric(
+    analysis_temperature_c,
+    "analysis_temperature_c",
+    fn = "evaluate_determinability"
+  )
+  assert_scalar_numeric(
+    viscosity_1,
+    "viscosity_1",
+    fn = "evaluate_determinability"
+  )
+  assert_scalar_numeric(
+    viscosity_2,
+    "viscosity_2",
+    fn = "evaluate_determinability"
+  )
 
-  rule <- get_sample_type_rule(sample_type, analysis_temperature_c, metric = "determinability")
+  rule <- get_sample_type_rule(
+    sample_type,
+    analysis_temperature_c,
+    metric = "determinability"
+  )
   y <- mean(c(viscosity_1, viscosity_2))
   diff <- abs(viscosity_1 - viscosity_2)
   limit <- calculate_precision_limit(rule, y)
@@ -195,13 +225,26 @@ evaluate_determinability <- function(sample_type, analysis_temperature_c, viscos
 #' @param result_2 Second reported kinematic viscosity result, mm2/s.
 #' @return A list containing the difference, rule limit, and pass/fail status.
 #' @export
-evaluate_repeatability <- function(sample_type, analysis_temperature_c, result_1, result_2) {
-  assert_string(sample_type, "sample_type")
-  assert_scalar_numeric(analysis_temperature_c, "analysis_temperature_c")
-  assert_scalar_numeric(result_1, "result_1")
-  assert_scalar_numeric(result_2, "result_2")
+evaluate_repeatability <- function(
+  sample_type,
+  analysis_temperature_c,
+  result_1,
+  result_2
+) {
+  assert_string(sample_type, "sample_type", fn = "evaluate_repeatability")
+  assert_scalar_numeric(
+    analysis_temperature_c,
+    "analysis_temperature_c",
+    fn = "evaluate_repeatability"
+  )
+  assert_scalar_numeric(result_1, "result_1", fn = "evaluate_repeatability")
+  assert_scalar_numeric(result_2, "result_2", fn = "evaluate_repeatability")
 
-  rule <- get_sample_type_rule(sample_type, analysis_temperature_c, metric = "repeatability")
+  rule <- get_sample_type_rule(
+    sample_type,
+    analysis_temperature_c,
+    metric = "repeatability"
+  )
   x <- mean(c(result_1, result_2))
   diff <- abs(result_1 - result_2)
   limit <- calculate_precision_limit(rule, x)
@@ -229,13 +272,26 @@ evaluate_repeatability <- function(sample_type, analysis_temperature_c, result_1
 #' @param result_2 Second reported kinematic viscosity result, mm2/s.
 #' @return A list containing the difference, rule limit, and pass/fail status.
 #' @export
-evaluate_reproducibility <- function(sample_type, analysis_temperature_c, result_1, result_2) {
-  assert_string(sample_type, "sample_type")
-  assert_scalar_numeric(analysis_temperature_c, "analysis_temperature_c")
-  assert_scalar_numeric(result_1, "result_1")
-  assert_scalar_numeric(result_2, "result_2")
+evaluate_reproducibility <- function(
+  sample_type,
+  analysis_temperature_c,
+  result_1,
+  result_2
+) {
+  assert_string(sample_type, "sample_type", fn = "evaluate_reproducibility")
+  assert_scalar_numeric(
+    analysis_temperature_c,
+    "analysis_temperature_c",
+    fn = "evaluate_reproducibility"
+  )
+  assert_scalar_numeric(result_1, "result_1", fn = "evaluate_reproducibility")
+  assert_scalar_numeric(result_2, "result_2", fn = "evaluate_reproducibility")
 
-  rule <- get_sample_type_rule(sample_type, analysis_temperature_c, metric = "reproducibility")
+  rule <- get_sample_type_rule(
+    sample_type,
+    analysis_temperature_c,
+    metric = "reproducibility"
+  )
   x <- mean(c(result_1, result_2))
   diff <- abs(result_1 - result_2)
   limit <- calculate_precision_limit(rule, x)

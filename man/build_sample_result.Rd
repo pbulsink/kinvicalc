@@ -10,7 +10,6 @@ build_sample_result(
   analysis_temperature_c,
   time_1,
   time_2,
-  kinetic_energy_factor = NA_real_,
   min_flow_time_s = MIN_FLOW_TIME_S,
   operator = NA_character_,
   notes = NA_character_
@@ -27,13 +26,10 @@ build_sample_result(
 
 \item{time_2}{Second measured flow time, s.}
 
-\item{kinetic_energy_factor}{Kinetic energy factor \code{E} (mm2*s), required
-only if either flow time is below \code{min_flow_time_s}.}
-
-\item{min_flow_time_s}{Minimum flow time, s, before a kinetic energy
-correction is required. Defaults to 200 s (ASTM D445-26 6.1.2/10.2);
-override with the viscometer/size-specific minimum from Specifications
-D446 when it is higher.}
+\item{min_flow_time_s}{Minimum flow time, s, below which a result is
+flagged. Defaults to 200 s (ASTM D445-26 6.1.2/10.2); override with the
+viscometer/size-specific minimum from Specifications D446 when it is
+higher.}
 
 \item{operator}{Optional operator name.}
 
@@ -49,7 +45,8 @@ so the caller/UI can prompt for a repeat measurement per ASTM D445-26
 Assembles the two determined kinematic viscosity values (from the two
 flow-time measurements on the same viscometer, ASTM D445-26 11.2/14.1),
 checks determinability, and -- if the two values agree -- averages them
-into a single reported result. If a flow time is below the minimum, a
-kinetic energy correction (D446-24 8.2) is applied automatically; supply
-\code{kinetic_energy_factor} in that case.
+into a single reported result. This package does not apply a kinetic
+energy correction; instead, any flow time below \code{min_flow_time_s} is
+flagged (\code{low_flow_time_flag}) so it can be surfaced in reports for
+operator review (ASTM D445-26 6.1.2/10.2).
 }

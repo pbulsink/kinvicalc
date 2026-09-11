@@ -3,12 +3,14 @@
 \name{MIN_FLOW_TIME_S}
 \alias{MIN_FLOW_TIME_S}
 \title{Minimum flow time, in seconds, below which ASTM D445-26 6.1.2/D446-24 8.2.1
-requires a kinetic energy correction to be applied.}
+flags the result for review (short flow times increase measurement
+uncertainty).}
 \usage{
 MIN_FLOW_TIME_S
 }
 \description{
 Minimum flow time, in seconds, below which ASTM D445-26 6.1.2/D446-24 8.2.1
-requires a kinetic energy correction to be applied.
+flags the result for review (short flow times increase measurement
+uncertainty).
 }
 \keyword{internal}
