@@ -47,3 +47,9 @@ po/*~
 
 # RStudio Connect folder
 rsconnect/
+
+# PositAI folder
+.posit/*
+
+# reference docs
+*.pdf

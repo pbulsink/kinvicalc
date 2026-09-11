@@ -1,0 +1,54 @@
+---
+title: "kinvicalc workflows"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{kinvicalc workflows}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r, include = FALSE}
+library(kinvicalc)
+```
+
+This vignette shows the most common package workflows: creating a viscometer, calculating a viscosity result, and rendering a report.
+
+## Add a viscometer
+
+```{r}
+viscometer <- tibble::tibble(
+  viscometer_id = "001-00001",
+  viscometer_size = 1,
+  serial_number = "00001",
+  calibration_date = as.Date("2024-01-01"),
+  status = "active",
+  factor_40_top = 0.025,
+  factor_40_bottom = 0.029,
+  factor_100_top = 0.016,
+  factor_100_bottom = 0.018
+)
+
+add_viscometer(viscometer)
+```
+
+## Build a result
+
+```{r}
+result <- build_sample_result(
+  viscometer_id = "001-00001",
+  sample_type = "base_oil",
+  analysis_temperature_c = 40,
+  time_1 = 200,
+  time_2 = 210
+)
+
+result
+```
+
+## Generate a report
+
+```{r, eval = FALSE}
+render_primary_report(result)
+```
+
+This package is intentionally structured so the same functions can be used from scripts, tests, and the Shiny app.

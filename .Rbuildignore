@@ -1,0 +1,8 @@
+^\.git$
+^\.posit$
+^\.Rproj\.user$
+^\.DS_Store$
+^README\.Rmd$
+^\.github$
+^vignettes/$
+^tests/testthat/_snaps$
