@@ -9,6 +9,11 @@
 - storing viscometer and sample-type metadata locally
 - generating print-friendly sample and session reports
 
+  <!-- badges: start -->
+  [![R-CMD-check](https://github.com/pbulsink/kinvicalc/actions/workflows/R-CMD-check.yaml/badge.svghttps://github.com/pbulsink/kinvicalc/actions/workflows/R-CMD-check.yaml/badge.svghttps://github.com/pbulsink/kinvicalc/actions/workflows/R-CMD-check.yaml/badge.svg)](https://github.com/pbulsink/kinvicalc/actions/workflows/R-CMD-check.yaml)
+  [![Coverage Status](https://coveralls.io/repos/github/pbulsink/kinvicalc/badge.svg?branch=main)](https://coveralls.io/github/pbulsink/kinvicalc?branch=main)
+  <!-- badges: end -->
+
 ## Example
 
 ```r
