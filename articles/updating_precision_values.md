@@ -1,0 +1,201 @@
+# Updating Determinability, Repeatability, and Reproducibility Values
+
+## Who this vignette is for
+
+ASTM D445 is revised periodically, and each new edition can change the
+determinability (d), repeatability (r), and reproducibility (R) limits
+that `kinvicalc` uses to decide whether a pair of viscosity measurements
+agrees closely enough to be reported. This guide walks through updating
+those numbers **without needing to be an R programmer**. You will edit
+one small, clearly labelled block of numbers in a single file, following
+the same pattern already used for every existing entry.
+
+You will need:
+
+- A text editor capable of opening a plain-text `.R` file (Positron,
+  RStudio, VS Code, or even Notepad will all work).
+- The current, correct copy of the ASTM D445 standard (the edition you
+  are updating to), specifically the precision tables in Section 17
+  (“Precision and Bias”).
+- Someone on the team comfortable running `R CMD check` or
+  `devtools::test()` afterwards to confirm nothing broke (a one-line
+  request to a colleague if you don’t use R yourself).
+
+This vignette covers updating the package’s permanent, built-in defaults
+in `R/utils.R` – the values every new installation of `kinvicalc` ships
+with. This is the right approach whenever a new ASTM edition changes the
+published precision tables, since it makes the new numbers the standard
+behaviour for everyone who installs or reinstalls the package, rather
+than a one-off fix on a single machine.
+
+## Where the numbers live
+
+Every precision value `kinvicalc` ships with is defined in one place:
+`R/utils.R`, inside a function called
+[`.default_sample_rules()`](https://pbulsink.github.io/kinvicalc/reference/dot-default_sample_rules.md).
+Open that file and look for three tables, one after another:
+
+- `determinability` — the d limit (17.1.1/17.1.2)
+- `repeatability` — the r limit (17.2.1)
+- `reproducibility` — the R limit (17.2.2)
+
+Each table is a simple grid, one row per sample type/temperature
+combination. Here is a shortened example showing three rows from the
+`determinability` table, with the column headers repeated above each row
+for readability:
+
+``` r
+
+determinability <- tibble::tribble(
+  ~sample_type    , ~temp_min_c , ~temp_max_c , ~coefficient_a , ~exponent_b , ~offset , ~notes                                        ,
+  "base_oil"      ,          40 ,          40 , 0.0037         , 1           ,       0 , "D445-26 17.1.1: base oils at 40 C (0.37 %)" ,
+  "base_oil"      ,         100 ,         100 , 0.0036         , 1           ,       0 , "D445-26 17.1.1: base oils at 100 C (0.36 %)",
+  "petroleum_wax" ,         100 ,         100 , 0.0080         , 1           ,       0 , "D445-26 17.1.1: petroleum wax at 100 C (0.80 %)"
+)
+```
+
+Each row is one precision limit for one sample type at one temperature
+(or temperature range). The columns mean:
+
+| Column | Meaning |
+|----|----|
+| `sample_type` | The material name, using an all-lowercase, underscore-separated label (e.g. `base_oil`, `residual_fuel_oil`). This must exactly match the label used elsewhere in the package – see [Sample type labels](#sample-type-labels-already-in-use) below. |
+| `temp_min_c` / `temp_max_c` | The temperature range (in Celsius) this row applies to. For a single named test temperature (the usual case), set both to the same value, e.g. `40, 40`. For an open-ended range, use `-Inf` or `Inf`. |
+| `coefficient_a` | The numeric coefficient from the standard’s formula. |
+| `exponent_b` | The exponent from the standard’s formula. Use `1` for a plain linear formula, `0` for a fixed limit that doesn’t depend on the result, or the specific decimal exponent ASTM publishes (e.g. `1.1`). |
+| `offset` | An additive term inside the parentheses, if the standard’s formula has one (e.g. `(y + 1)`). Use `0` if there is no offset. |
+| `notes` | A short plain-English citation of where this number came from – always include the ASTM section number and edition, and the plain-language percentage or value, so the next person can verify it at a glance. |
+
+## How the formula works
+
+Every limit in `kinvicalc`, regardless of sample type, is calculated the
+same way:
+
+``` math
+\text{limit} = \text{coefficient\_a} \times (\text{average} + \text{offset})^{\text{exponent\_b}}
+```
+
+where `average` is the average of the two viscosity values (or two
+results) being compared. This single formula covers every form used
+across the ASTM tables:
+
+| ASTM formula example | How to enter it |
+|----|----|
+| `0.0037y` (0.37% of the average) | `coefficient_a = 0.0037`, `exponent_b = 1`, `offset = 0` |
+| `0.0013(y+1)` | `coefficient_a = 0.0013`, `exponent_b = 1`, `offset = 1` |
+| `0.00106y^1.1` | `coefficient_a = 0.00106`, `exponent_b = 1.1`, `offset = 0` |
+| A fixed value, e.g. “0.01617 mm2/s” | `coefficient_a = 0.01617`, `exponent_b = 0`, `offset = 0` |
+
+For a fixed value, setting `exponent_b` to `0` makes the formula reduce
+to just `coefficient_a`, no matter what the average is – that’s the
+trick used for jet fuels at low temperatures in the current tables.
+
+## Step-by-step: updating a value for a new ASTM edition
+
+Suppose ASTM revises the repeatability limit for base oils at 40 C from
+1.01% to, say, 1.05%. Here is the full process:
+
+1.  **Open `R/utils.R`** in your editor and find the `repeatability`
+    table inside
+    [`.default_sample_rules()`](https://pbulsink.github.io/kinvicalc/reference/dot-default_sample_rules.md).
+2.  **Locate the row** for `"base_oil"` with `temp_min_c` and
+    `temp_max_c` both `40`.
+3.  **Change `coefficient_a`** from `0.0101` to `0.0105` (1.05%
+    expressed as a decimal fraction, matching how every other row is
+    written).
+4.  **Update the `notes` column** for that row to cite the new edition
+    and value, e.g. `"D445-27 17.2.1: base oils at 40 C (1.05 %)"`.
+    Keeping the edition number and section reference current makes it
+    possible for a future reader to re-verify the number without
+    re-reading the whole standard.
+5.  **Save the file.**
+6.  **Ask someone to run the test suite** (`devtools::test()`) and,
+    ideally, the R Markdown vignette rebuild, to confirm the change
+    didn’t break anything mechanical (a mistyped number, an unbalanced
+    comma, etc.). New/changed numbers don’t need new tests to be
+    *correct*, but if your organization keeps regression tests asserting
+    specific limits (see `tests/testthat/test-sample-types.R`), those
+    tests will need the same update in the same places – a colleague
+    comfortable with R can point out which lines, if any, hard-code the
+    old value.
+7.  **Record the change** somewhere durable (a changelog entry, or an
+    internal memo) noting which ASTM edition triggered the update – this
+    file itself only stores the *current* values, not a history of prior
+    ones.
+
+That’s the entire process for changing an existing number. The next
+section covers adding a brand-new row.
+
+## Adding a new sample type or temperature
+
+If the new ASTM edition adds a sample type or a temperature this package
+doesn’t yet cover, add a new row to the relevant table (or all three, if
+the standard defines determinability, repeatability, and reproducibility
+for it) rather than editing an existing row. Copy the format of an
+existing row exactly, including the trailing comma, and place it
+anywhere within the same table – row order does not matter functionally,
+but grouping by sample type keeps the file readable for the next person.
+
+``` r
+"new_sample_type" , 40 , 40 , 0.0050 , 1 , 0 , "D445-27 17.2.1: new sample type at 40 C (0.50 %)" ,
+```
+
+Make sure every one of the seven columns is filled in, including
+`notes`, and that the row ends with a comma (except the very last row in
+the whole table, which has no trailing comma).
+
+### Sample type labels already in use
+
+Use one of these existing labels if your new row is a variant of a
+material already covered, so the app’s dropdown and existing lookups
+keep working without further changes: `base_oil`, `formulated_oil`,
+`petroleum_wax`, `residual_fuel_oil`, `additive`, `gas_oil`, `jet_fuel`,
+`kerosine_diesel_biodiesel` (spelled `kerosene_diesel_biodiesel` in the
+repeatability/reproducibility tables – an existing inconsistency in the
+source data worth flagging to a developer if you touch these rows),
+`used_inservice_formulated_oil`, `unlisted` (the fallback used for
+anything not explicitly listed), and `standard` (the Characterization
+Laboratory QA/QC reference substance). Introduce a brand-new label only
+when the material genuinely isn’t one of these.
+
+## What *not* to change
+
+- **Don’t remove a row just because you’re unsure of it.** A few rows in
+  the current tables intentionally have `coefficient_a` left blank
+  (`NA`) because the number could not be confidently read from a scanned
+  copy of the standard. Leaving them blank makes `kinvicalc` refuse to
+  use that number rather than silently guessing – if you have access to
+  a clean copy of the standard, filling these in with a verified value
+  (and a `notes` entry saying so) is a welcome fix, but leave them blank
+  rather than inventing a plausible-looking number.
+- **Don’t change the formula itself.** The underlying calculation
+  (`coefficient_a * (average + offset) ^ exponent_b`) is fixed and
+  covers every case in the standard; you should only ever need to change
+  the numbers that feed into it.
+- **Don’t touch anything outside these three tables in `utils.R`** as
+  part of this task – the file contains other unrelated helper code
+  above and below
+  [`.default_sample_rules()`](https://pbulsink.github.io/kinvicalc/reference/dot-default_sample_rules.md).
+
+## After you save: getting the new defaults into use
+
+Editing `R/utils.R` only changes what a fresh installation of
+`kinvicalc` will store. Existing installations that already have a local
+reference database (created the first time `kinvicalc` ran on that
+machine) will keep using whatever values were seeded into that database
+when it was first created, and won’t automatically pick up your edit.
+After the package is reinstalled with your changes (a developer runs
+`devtools::install()` or publishes a new package version), each user’s
+local database needs to be reset so the new defaults are reseeded – ask
+a developer to confirm the correct reset procedure for your deployment
+before rolling out an ASTM update, so nobody is left silently using
+stale limits.
+
+## Summary
+
+All three precision limits share one formula and one file. Updating a
+value for a new ASTM edition means: find the row in `R/utils.R`, change
+`coefficient_a` (and `exponent_b`/`offset` if the formula’s shape
+changed), update the `notes` citation, save, and ask a developer to
+re-run the tests. No other file needs to change for a numeric update
+alone.

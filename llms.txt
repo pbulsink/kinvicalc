@@ -1,0 +1,251 @@
+# kinvicalc ![kinvicalc logo](reference/figures/icon.png)
+
+`kinvicalc` is an R package implementing ASTM D445-26 / D446-24
+kinematic viscosity workflows for viscometer-based testing. It provides
+a reusable API for:
+
+- validating viscometer and sample-type records
+- resolving calibration factors, interpolated between 40 C and 100 C
+- calculating kinematic viscosity (`nu = C * t`) from measured flow
+  times
+- flagging (not correcting) flow times below the ASTM minimum
+- evaluating determinability, repeatability, and reproducibility per
+  D445-26 Section 17, including a “standard” reference-sample QA/QC
+  check against a known expected value
+- storing viscometer and sample-type metadata in a local SQLite
+  registry, with in-place calibration-factor correction for existing
+  viscometers
+- generating print-friendly primary and high-density sample reports,
+  plus a session results table
+
+`kinvicalc` does **not** implement a kinetic energy (E) correction or a
+gravity correction; low flow times are surfaced to the operator via a
+flag instead of being silently corrected.
+
+## Installation
+
+``` r
+
+# install.packages("pak")
+pak::pak("pbulsink/kinvicalc")
+```
+
+## Example
+
+The example below registers a viscometer, then calculates and evaluates
+a two-determination result. The flow times are chosen so the two
+determinations agree closely and the determinability check passes; see
+[`evaluate_determinability()`](https://pbulsink.github.io/kinvicalc/reference/evaluate_determinability.md)
+for what happens (and how it is reported) when it does not.
+
+``` r
+
+library(kinvicalc)
+
+viscometer <- tibble::tibble(
+  viscometer_id = "001-00001",
+  viscometer_size = 1,
+  serial_number = "00001",
+  calibration_date = as.Date("2024-01-01"),
+  status = "active",
+  factor_40_top = 0.025,
+  factor_40_bottom = 0.029,
+  factor_100_top = 0.016,
+  factor_100_bottom = 0.018
+)
+
+add_viscometer(viscometer)
+#> # A tibble: 1 × 16
+#>   viscometer_id
+#>   <chr>        
+#> 1 001-00001    
+#> # ℹ 15 more variables:
+#> #   viscometer_size <int>,
+#> #   serial_number <chr>,
+#> #   status <chr>,
+#> #   factor_40_top <dbl>,
+#> #   factor_40_bottom <dbl>,
+#> #   factor_100_top <dbl>, …
+
+result <- build_sample_result(
+  viscometer_id = "001-00001",
+  sample_type = "unlisted",
+  analysis_temperature_c = 40,
+  time_1 = 232,
+  time_2 = 200
+)
+
+result$kinematic_viscosity_cSt
+#> [1] 5.8
+```
+
+A print-friendly HTML report can be written from the same result object
+with `render_primary_report(result, output_path = "report.html")`; for a
+quick look at the console, inspect the result fields directly:
+
+``` r
+
+result[c(
+  "viscometer_id",
+  "sample_type",
+  "kinematic_viscosity_cSt",
+  "determinability_result",
+  "low_flow_time_flag"
+)]
+#> $viscometer_id
+#> [1] "001-00001"
+#> 
+#> $sample_type
+#> [1] "unlisted"
+#> 
+#> $kinematic_viscosity_cSt
+#> [1] 5.8
+#> 
+#> $determinability_result
+#> [1] "pass"
+#> 
+#> $low_flow_time_flag
+#> [1] FALSE
+```
+
+## Shiny app
+
+`kinvicalc` ships an interactive Shiny app for day-to-day lab use:
+entering two flow-time determinations, viewing the calculated result and
+determinability/repeatability/reproducibility checks (including the
+“standard” QA/QC reference-sample workflow), locking results into a
+session table, and adding or correcting viscometers in the registry.
+
+Launch it with:
+
+``` r
+
+library(kinvicalc)
+run_app()
+```
+
+Do not [`source()`](https://rdrr.io/r/base/source.html) or run `R/app.R`
+directly from a package checkout — always launch via
+[`run_app()`](https://pbulsink.github.io/kinvicalc/reference/run_app.md)
+(or, for local development, the thin delegator at `inst/shiny/app.R`),
+so that package-internal helpers resolve correctly.
+
+# Package index
+
+## Calculating kinematic viscosity
+
+Core ASTM D445-26 Eq 2 / D446-24 Eq 5 calculation (`nu = C * t`), and
+the full two-determination workflow that resolves calibration factors,
+calculates both determinations, and checks determinability in one call.
+
+- [`calculate_kinematic_viscosity()`](https://pbulsink.github.io/kinvicalc/reference/calculate_kinematic_viscosity.md)
+  : Calculate kinematic viscosity from time and calibration constant.
+- [`build_sample_result()`](https://pbulsink.github.io/kinvicalc/reference/build_sample_result.md)
+  : Build a sample result record.
+
+## Viscometer registry
+
+Add, look up, and maintain viscometers in the local SQLite registry,
+including archiving, use-count tracking, and in-place calibration-factor
+correction.
+
+- [`build_viscometer_record()`](https://pbulsink.github.io/kinvicalc/reference/build_viscometer_record.md)
+  : Build a viscometer record tibble.
+- [`validate_viscometer_record()`](https://pbulsink.github.io/kinvicalc/reference/validate_viscometer_record.md)
+  : Validate a viscometer record.
+- [`validate_viscometer()`](https://pbulsink.github.io/kinvicalc/reference/validate_viscometer.md)
+  : Validate a viscometer identifier.
+- [`format_viscometer_id()`](https://pbulsink.github.io/kinvicalc/reference/format_viscometer_id.md)
+  : Format a viscometer ID
+- [`add_viscometer()`](https://pbulsink.github.io/kinvicalc/reference/add_viscometer.md)
+  : Add a viscometer record to the local registry.
+- [`get_viscometer()`](https://pbulsink.github.io/kinvicalc/reference/get_viscometer.md)
+  : Get one viscometer by identifier.
+- [`list_viscometers()`](https://pbulsink.github.io/kinvicalc/reference/list_viscometers.md)
+  : List all viscometers in the local registry.
+- [`list_active_viscometers()`](https://pbulsink.github.io/kinvicalc/reference/list_active_viscometers.md)
+  : List active viscometers in the local registry.
+- [`list_archived_viscometers()`](https://pbulsink.github.io/kinvicalc/reference/list_archived_viscometers.md)
+  : List archived viscometers in the local registry.
+- [`archive_viscometer()`](https://pbulsink.github.io/kinvicalc/reference/archive_viscometer.md)
+  : Archive a viscometer in the local registry.
+- [`unarchive_viscometer()`](https://pbulsink.github.io/kinvicalc/reference/unarchive_viscometer.md)
+  : Unarchive a viscometer in the local registry.
+- [`remove_viscometer()`](https://pbulsink.github.io/kinvicalc/reference/remove_viscometer.md)
+  : Remove a viscometer from the local registry.
+- [`update_viscometer_factors()`](https://pbulsink.github.io/kinvicalc/reference/update_viscometer_factors.md)
+  : Update calibration factors for an existing viscometer.
+- [`resolve_calibration_factor()`](https://pbulsink.github.io/kinvicalc/reference/resolve_calibration_factor.md)
+  : Resolve the calibration factor for a specific bulb and temperature.
+- [`increment_viscometer_use()`](https://pbulsink.github.io/kinvicalc/reference/increment_viscometer_use.md)
+  : Increment viscometer use counters by one.
+- [`reset_viscometer_use_count()`](https://pbulsink.github.io/kinvicalc/reference/reset_viscometer_use_count.md)
+  : Reset viscometer use count since deep cleaning.
+- [`get_viscometer_use_summary()`](https://pbulsink.github.io/kinvicalc/reference/get_viscometer_use_summary.md)
+  : Get viscometer use counters.
+
+## Precision checks (determinability, repeatability, reproducibility)
+
+ASTM D445-26 Section 17 precision rules and the checks that compare
+measured values against them.
+
+- [`validate_sample_type_rule()`](https://pbulsink.github.io/kinvicalc/reference/validate_sample_type_rule.md)
+  : Validate a sample-type precision rule.
+- [`get_sample_type_rule()`](https://pbulsink.github.io/kinvicalc/reference/get_sample_type_rule.md)
+  : Get a sample-type precision rule.
+- [`add_sample_type_rule()`](https://pbulsink.github.io/kinvicalc/reference/add_sample_type_rule.md)
+  : Add or replace a sample type precision rule.
+- [`evaluate_determinability()`](https://pbulsink.github.io/kinvicalc/reference/evaluate_determinability.md)
+  : Evaluate determinability for a sample at a given temperature.
+- [`evaluate_repeatability()`](https://pbulsink.github.io/kinvicalc/reference/evaluate_repeatability.md)
+  : Evaluate repeatability between two independent results.
+- [`evaluate_reproducibility()`](https://pbulsink.github.io/kinvicalc/reference/evaluate_reproducibility.md)
+  : Evaluate reproducibility between two independent results from
+  different labs.
+
+## Reporting and session state
+
+Render sample and session reports, lock results once reviewed, and
+format numeric/label output for display.
+
+- [`render_primary_report()`](https://pbulsink.github.io/kinvicalc/reference/render_primary_report.md)
+  : Render a primary sample report.
+- [`render_high_density_report()`](https://pbulsink.github.io/kinvicalc/reference/render_high_density_report.md)
+  : Render a high-density locked sample report.
+- [`lock_result()`](https://pbulsink.github.io/kinvicalc/reference/lock_result.md)
+  : Lock a result in the session state.
+- [`session_results_table()`](https://pbulsink.github.io/kinvicalc/reference/session_results_table.md)
+  : Create a session results table.
+- [`format_significant()`](https://pbulsink.github.io/kinvicalc/reference/format_significant.md)
+  : Format a numeric value to at least a given number of significant
+  figures.
+
+## Reference data storage
+
+Save and load the local SQLite registry (viscometers and sample-type
+precision rules) as a whole.
+
+- [`save_reference_data()`](https://pbulsink.github.io/kinvicalc/reference/save_reference_data.md)
+  : Save reference data to the local database.
+- [`load_reference_data()`](https://pbulsink.github.io/kinvicalc/reference/load_reference_data.md)
+  : Load reference data from the local database.
+
+## Shiny application
+
+Launch the interactive measurement and registry-maintenance app.
+
+- [`run_app()`](https://pbulsink.github.io/kinvicalc/reference/run_app.md)
+  : Run the kinvicalc Shiny application.
+- [`format_sample_type_label_app()`](https://pbulsink.github.io/kinvicalc/reference/format_sample_type_label_app.md)
+  : Format a sample type code as a human-readable label.
+
+# Articles
+
+### Articles
+
+- [kinvicalc
+  workflows](https://pbulsink.github.io/kinvicalc/articles/kinvicalc-workflows.md):
+- [A Tour of the kinvicalc Shiny
+  App](https://pbulsink.github.io/kinvicalc/articles/kinvicalc_app_tour.md):
+- [Updating Determinability, Repeatability, and Reproducibility
+  Values](https://pbulsink.github.io/kinvicalc/articles/updating_precision_values.md):

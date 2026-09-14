@@ -1,0 +1,131 @@
+# kinvicalc ![kinvicalc logo](reference/figures/icon.png)
+
+`kinvicalc` is an R package implementing ASTM D445-26 / D446-24
+kinematic viscosity workflows for viscometer-based testing. It provides
+a reusable API for:
+
+- validating viscometer and sample-type records
+- resolving calibration factors, interpolated between 40 C and 100 C
+- calculating kinematic viscosity (`nu = C * t`) from measured flow
+  times
+- flagging (not correcting) flow times below the ASTM minimum
+- evaluating determinability, repeatability, and reproducibility per
+  D445-26 Section 17, including a “standard” reference-sample QA/QC
+  check against a known expected value
+- storing viscometer and sample-type metadata in a local SQLite
+  registry, with in-place calibration-factor correction for existing
+  viscometers
+- generating print-friendly primary and high-density sample reports,
+  plus a session results table
+
+`kinvicalc` does **not** implement a kinetic energy (E) correction or a
+gravity correction; low flow times are surfaced to the operator via a
+flag instead of being silently corrected.
+
+## Installation
+
+``` r
+
+# install.packages("pak")
+pak::pak("pbulsink/kinvicalc")
+```
+
+## Example
+
+The example below registers a viscometer, then calculates and evaluates
+a two-determination result. The flow times are chosen so the two
+determinations agree closely and the determinability check passes; see
+[`evaluate_determinability()`](https://pbulsink.github.io/kinvicalc/reference/evaluate_determinability.md)
+for what happens (and how it is reported) when it does not.
+
+``` r
+
+library(kinvicalc)
+
+viscometer <- tibble::tibble(
+  viscometer_id = "001-00001",
+  viscometer_size = 1,
+  serial_number = "00001",
+  calibration_date = as.Date("2024-01-01"),
+  status = "active",
+  factor_40_top = 0.025,
+  factor_40_bottom = 0.029,
+  factor_100_top = 0.016,
+  factor_100_bottom = 0.018
+)
+
+add_viscometer(viscometer)
+#> # A tibble: 1 × 16
+#>   viscometer_id
+#>   <chr>        
+#> 1 001-00001    
+#> # ℹ 15 more variables:
+#> #   viscometer_size <int>,
+#> #   serial_number <chr>,
+#> #   status <chr>,
+#> #   factor_40_top <dbl>,
+#> #   factor_40_bottom <dbl>,
+#> #   factor_100_top <dbl>, …
+
+result <- build_sample_result(
+  viscometer_id = "001-00001",
+  sample_type = "unlisted",
+  analysis_temperature_c = 40,
+  time_1 = 232,
+  time_2 = 200
+)
+
+result$kinematic_viscosity_cSt
+#> [1] 5.8
+```
+
+A print-friendly HTML report can be written from the same result object
+with `render_primary_report(result, output_path = "report.html")`; for a
+quick look at the console, inspect the result fields directly:
+
+``` r
+
+result[c(
+  "viscometer_id",
+  "sample_type",
+  "kinematic_viscosity_cSt",
+  "determinability_result",
+  "low_flow_time_flag"
+)]
+#> $viscometer_id
+#> [1] "001-00001"
+#> 
+#> $sample_type
+#> [1] "unlisted"
+#> 
+#> $kinematic_viscosity_cSt
+#> [1] 5.8
+#> 
+#> $determinability_result
+#> [1] "pass"
+#> 
+#> $low_flow_time_flag
+#> [1] FALSE
+```
+
+## Shiny app
+
+`kinvicalc` ships an interactive Shiny app for day-to-day lab use:
+entering two flow-time determinations, viewing the calculated result and
+determinability/repeatability/reproducibility checks (including the
+“standard” QA/QC reference-sample workflow), locking results into a
+session table, and adding or correcting viscometers in the registry.
+
+Launch it with:
+
+``` r
+
+library(kinvicalc)
+run_app()
+```
+
+Do not [`source()`](https://rdrr.io/r/base/source.html) or run `R/app.R`
+directly from a package checkout — always launch via
+[`run_app()`](https://pbulsink.github.io/kinvicalc/reference/run_app.md)
+(or, for local development, the thin delegator at `inst/shiny/app.R`),
+so that package-internal helpers resolve correctly.
