@@ -225,6 +225,116 @@ add_viscometer <- function(viscometer) {
   get_viscometer(viscometer$viscometer_id[1])
 }
 
+#' Update calibration factors for an existing viscometer.
+#'
+#' Used to correct calibration factors that were entered incorrectly when the
+#' viscometer was first added, without disturbing its use counters, creation
+#' date, or archive status. If `notes` is left blank, an auto-generated note
+#' of the form `"Updated YYYY-MM-DD by <updated_by>"` is recorded so the
+#' correction is traceable.
+#'
+#' @param viscometer_id A viscometer identifier.
+#' @param factor_40_top,factor_40_bottom,factor_100_top,factor_100_bottom
+#'   Replacement calibration factors.
+#' @param notes Optional replacement notes. If `NA` or blank, an
+#'   auto-generated "updated" note is recorded instead.
+#' @param updated_by Optional name/identifier of the person making the
+#'   update, used in the auto-generated note.
+#' @return The updated viscometer record.
+#' @export
+#' @examples
+#' \dontrun{
+#' update_viscometer_factors(
+#'   "007-00007",
+#'   factor_40_top = 0.0251,
+#'   factor_40_bottom = 0.0251,
+#'   factor_100_top = 0.0251,
+#'   factor_100_bottom = 0.0251,
+#'   updated_by = "jsmith"
+#' )
+#' }
+update_viscometer_factors <- function(
+  viscometer_id,
+  factor_40_top,
+  factor_40_bottom,
+  factor_100_top,
+  factor_100_bottom,
+  notes = NA_character_,
+  updated_by = NA_character_
+) {
+  assert_string(
+    viscometer_id,
+    "viscometer_id",
+    fn = "update_viscometer_factors"
+  )
+  assert_scalar_numeric(
+    factor_40_top,
+    "factor_40_top",
+    fn = "update_viscometer_factors"
+  )
+  assert_scalar_numeric(
+    factor_40_bottom,
+    "factor_40_bottom",
+    fn = "update_viscometer_factors"
+  )
+  assert_scalar_numeric(
+    factor_100_top,
+    "factor_100_top",
+    fn = "update_viscometer_factors"
+  )
+  assert_scalar_numeric(
+    factor_100_bottom,
+    "factor_100_bottom",
+    fn = "update_viscometer_factors"
+  )
+
+  if (is.na(notes) || !nzchar(trimws(notes))) {
+    notes <- sprintf(
+      "Updated %s by %s",
+      as.character(Sys.Date()),
+      if (is.na(updated_by) || !nzchar(trimws(updated_by))) {
+        "unknown"
+      } else {
+        trimws(updated_by)
+      }
+    )
+  } else {
+    notes <- trimws(notes)
+  }
+
+  db <- reference_db_connection()
+  on.exit(DBI::dbDisconnect(db), add = TRUE)
+
+  updated <- DBI::dbExecute(
+    db,
+    "UPDATE viscometers
+     SET factor_40_top = ?,
+         factor_40_bottom = ?,
+         factor_100_top = ?,
+         factor_100_bottom = ?,
+         notes = ?,
+         updated_at = CURRENT_TIMESTAMP
+     WHERE viscometer_id = ?",
+    params = list(
+      factor_40_top,
+      factor_40_bottom,
+      factor_100_top,
+      factor_100_bottom,
+      notes,
+      viscometer_id
+    )
+  )
+
+  if (updated == 0) {
+    cli::cli_abort(c(
+      "{.fn update_viscometer_factors}: no viscometer found for {.val {viscometer_id}}.",
+      "i" = "Check the identifier and add it with {.fn add_viscometer} if it is new."
+    ))
+  }
+
+  get_viscometer(viscometer_id)
+}
+
 #' Archive a viscometer in the local registry.
 #'
 #' @param viscometer_id A viscometer identifier.

@@ -43,6 +43,31 @@ add_viscometer(viscometer)
 The inserted record is returned from the registry, which makes it easy to confirm
 that the identifier, factors, and status were stored as expected.
 
+## Correct a viscometer's calibration factors
+
+If a viscometer's factors were entered incorrectly, `update_viscometer_factors()`
+corrects them in place without disturbing the record's identifier, creation
+date, use counters, or archive status.
+
+```{r update-viscometer}
+update_viscometer_factors(
+  "001-00001",
+  factor_40_top = 0.0251,
+  factor_40_bottom = 0.0291,
+  factor_100_top = 0.0161,
+  factor_100_bottom = 0.0181,
+  updated_by = "jsmith"
+)
+```
+
+If `notes` is left unspecified (or blank), the update is recorded automatically
+as `"Updated <date> by <updated_by>"` so the correction stays traceable; pass an
+explicit `notes` value to record a different reason instead. In the Shiny app
+(`R/app.R`), entering a viscometer size and serial number that already exist in
+the registry changes the "Add to registry" button to "Update Viscometer
+Factors" and prompts for confirmation before applying the change, calling this
+same function under the hood.
+
 ## Calculate a sample result
 
 A sample result uses two flow-time measurements from the same viscometer. The

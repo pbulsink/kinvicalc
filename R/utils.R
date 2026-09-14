@@ -157,18 +157,23 @@ format_viscometer_id <- function(viscometer_size, serial_number, fn = NULL) {
   }
 
   assert_string(serial_number, "serial_number", fn = fn)
-  if (!grepl("^[0-9]{1,5}$", serial_number)) {
+  if (!grepl("^[A-Za-z0-9]{1,5}$", serial_number)) {
     cli::cli_abort(c(
-      "{.fn {fn}}: {.arg serial_number} must contain only digits and be at most 5 characters.",
-      "i" = "Use the serial number digits only; the ID is built automatically as ###-#####."
+      "{.fn {fn}}: {.arg serial_number} must be alphanumeric and at most 5 characters.",
+      "i" = "The ID is built automatically as ###-XXXXX, zero-padded on the left to 5 characters."
     ))
   }
+  serial_number <- sprintf(
+    "%s%s",
+    strrep("0", 5 - nchar(serial_number)),
+    serial_number
+  )
 
-  sprintf("%03d-%05d", as.integer(viscometer_size), as.integer(serial_number))
+  sprintf("%03d-%s", as.integer(viscometer_size), serial_number)
 }
 
 is_valid_viscometer_id <- function(x) {
-  grepl("^[0-9]{3}-[0-9]{5}$", x)
+  grepl("^[0-9]{3}-[A-Za-z0-9]{5}$", x)
 }
 
 #' Format a numeric value to at least a given number of significant figures.
@@ -217,24 +222,25 @@ format_significant <- function(x, digits = 5) {
 # Table entries in 17.2.1/17.2.2 and update via `add_sample_type_rule()`.
 .default_sample_rules <- function() {
   determinability <- tibble::tribble(
-    ~sample_type                    , ~temp_min_c , ~temp_max_c , ~coefficient_a , ~exponent_b , ~offset , ~notes                                                                           ,
-    "base_oil"                      ,          40 ,          40 , 0.0037         , 1           ,       0 , "D445-26 17.1.1: base oils at 40 C (0.37 %)"                                     ,
-    "base_oil"                      ,         100 ,         100 , 0.0036         , 1           ,       0 , "D445-26 17.1.1: base oils at 100 C (0.36 %)"                                    ,
-    "formulated_oil"                ,          40 ,          40 , 0.0037         , 1           ,       0 , "D445-26 17.1.1: formulated oils at 40 C (0.37 %)"                               ,
-    "formulated_oil"                ,         100 ,         100 , 0.0036         , 1           ,       0 , "D445-26 17.1.1: formulated oils at 100 C (0.36 %)"                              ,
-    "formulated_oil"                ,         150 ,         150 , 0.015          , 1           ,       0 , "D445-26 17.1.1: formulated oils at 150 C (1.5 %)"                               ,
-    "petroleum_wax"                 ,         100 ,         100 , 0.0080         , 1           ,       0 , "D445-26 17.1.1: petroleum wax at 100 C (0.80 %)"                                ,
-    "residual_fuel_oil"             ,          50 ,          50 , 0.0244         , 1           ,       0 , "D445-26 17.1.1: residual fuel oils at 50 C (2.44 %)"                            ,
-    "residual_fuel_oil"             ,         100 ,         100 , 0.03           , 1           ,       0 , "D445-26 17.1.1: residual fuel oils at 100 C (3 %)"                              ,
-    "additive"                      ,         100 ,         100 , 0.00106        , 1.1         ,       0 , "D445-26 17.1.1: additives at 100 C, 0.00106 y^1.1"                              ,
-    "gas_oil"                       ,          40 ,          40 , 0.0013         , 1           ,       1 , "D445-26 17.1.1: gas oils at 40 C, 0.0013 (y+1)"                                 ,
-    "jet_fuel"                      ,         -20 ,         -20 , 0.01617        , 0           ,       0 , "D445-26 17.1.1: jet fuels at -20 C, fixed 0.01617 mm2/s"                        ,
-    "jet_fuel"                      ,         -40 ,         -40 , 0.03113        , 0           ,       0 , "D445-26 17.1.1: jet fuels at -40 C, fixed 0.03113 mm2/s"                        ,
-    "kerosine_diesel_biodiesel"     ,          40 ,          40 , 0.0037         , 1           ,       0 , "D445-26 17.1.1: kerosine, diesel, biodiesel fuels/blends at 40 C (0.37 %)"      ,
-    "used_inservice_formulated_oil" ,          15 ,         100 , 0.010          , 1           ,       0 , "D445-26 17.1.2: used in-service formulated oils, 15-100 C, 1.0 %"               ,
-    "unlisted"                      ,          15 ,         100 , 0.010          , 1           ,       0 , "D445-26 12.4.1: fallback for unlisted materials, 15-100 C, 1.0 %"               ,
-    "unlisted"                      , -Inf        ,          15 , 0.015          , 1           ,       0 , "D445-26 12.4.1/11.2.4: fallback for unlisted materials outside 15-100 C, 1.5 %" ,
-    "unlisted"                      ,         100 , Inf         , 0.015          , 1           ,       0 , "D445-26 12.4.1/11.2.4: fallback for unlisted materials outside 15-100 C, 1.5 %"
+    ~sample_type                    , ~temp_min_c , ~temp_max_c , ~coefficient_a , ~exponent_b , ~offset , ~notes                                                                              ,
+    "base_oil"                      ,          40 ,          40 , 0.0037         , 1           ,       0 , "D445-26 17.1.1: base oils at 40 C (0.37 %)"                                        ,
+    "base_oil"                      ,         100 ,         100 , 0.0036         , 1           ,       0 , "D445-26 17.1.1: base oils at 100 C (0.36 %)"                                       ,
+    "formulated_oil"                ,          40 ,          40 , 0.0037         , 1           ,       0 , "D445-26 17.1.1: formulated oils at 40 C (0.37 %)"                                  ,
+    "formulated_oil"                ,         100 ,         100 , 0.0036         , 1           ,       0 , "D445-26 17.1.1: formulated oils at 100 C (0.36 %)"                                 ,
+    "formulated_oil"                ,         150 ,         150 , 0.015          , 1           ,       0 , "D445-26 17.1.1: formulated oils at 150 C (1.5 %)"                                  ,
+    "petroleum_wax"                 ,         100 ,         100 , 0.0080         , 1           ,       0 , "D445-26 17.1.1: petroleum wax at 100 C (0.80 %)"                                   ,
+    "residual_fuel_oil"             ,          50 ,          50 , 0.0244         , 1           ,       0 , "D445-26 17.1.1: residual fuel oils at 50 C (2.44 %)"                               ,
+    "residual_fuel_oil"             ,         100 ,         100 , 0.03           , 1           ,       0 , "D445-26 17.1.1: residual fuel oils at 100 C (3 %)"                                 ,
+    "additive"                      ,         100 ,         100 , 0.00106        , 1.1         ,       0 , "D445-26 17.1.1: additives at 100 C, 0.00106 y^1.1"                                 ,
+    "gas_oil"                       ,          40 ,          40 , 0.0013         , 1           ,       1 , "D445-26 17.1.1: gas oils at 40 C, 0.0013 (y+1)"                                    ,
+    "jet_fuel"                      ,         -20 ,         -20 , 0.01617        , 0           ,       0 , "D445-26 17.1.1: jet fuels at -20 C, fixed 0.01617 mm2/s"                           ,
+    "jet_fuel"                      ,         -40 ,         -40 , 0.03113        , 0           ,       0 , "D445-26 17.1.1: jet fuels at -40 C, fixed 0.03113 mm2/s"                           ,
+    "kerosine_diesel_biodiesel"     ,          40 ,          40 , 0.0037         , 1           ,       0 , "D445-26 17.1.1: kerosine, diesel, biodiesel fuels/blends at 40 C (0.37 %)"         ,
+    "used_inservice_formulated_oil" ,          15 ,         100 , 0.010          , 1           ,       0 , "D445-26 17.1.2: used in-service formulated oils, 15-100 C, 1.0 %"                  ,
+    "unlisted"                      ,          15 ,         100 , 0.010          , 1           ,       0 , "D445-26 12.4.1: fallback for unlisted materials, 15-100 C, 1.0 %"                  ,
+    "unlisted"                      , -Inf        ,          15 , 0.015          , 1           ,       0 , "D445-26 12.4.1/11.2.4: fallback for unlisted materials outside 15-100 C, 1.5 %"    ,
+    "unlisted"                      ,         100 , Inf         , 0.015          , 1           ,       0 , "D445-26 12.4.1/11.2.4: fallback for unlisted materials outside 15-100 C, 1.5 %"    ,
+    "standard"                      , -Inf        , Inf         , 0.0037         , 1           ,       0 , "Characterization Laboratory Standard Reference Substance determinability (0.37 %)"
   )
 
   repeatability <- tibble::tribble(
@@ -253,26 +259,28 @@ format_significant <- function(x, digits = 5) {
     "jet_fuel"                      ,         -40 ,         -40 , 0.002719       , 1.14        ,       0 , "D445-26 17.2.1 jet fuels at -40 C 0.002719 x^1.14 or 0.0056"                       ,
     "used_inservice_formulated_oil" ,          40 ,          40 , 0.000233       , 1.722       ,       0 , "D445-26 17.2.1: used in-service formulated oils at 40 C, 0.000233 x^1.722 "        ,
     "used_inservice_formulated_oil" ,         100 ,         100 , 0.001005       , 1.4633      ,       0 , "D445-26 17.2.1: used in-service formulated oils at 100 C, 0.001005 x^1.4633"       ,
-    "kerosene_diesel_biodiesel"     ,          40 ,          40 , 0.0056         , 1           ,       0 , "D445-26 17.2.1: kerosine/diesel/biodiesel fuels/blends at 40 C, 0.0056 x (0.56 %)"
+    "kerosene_diesel_biodiesel"     ,          40 ,          40 , 0.0056         , 1           ,       0 , "D445-26 17.2.1: kerosine/diesel/biodiesel fuels/blends at 40 C, 0.0056 x (0.56 %)" ,
+    "standard"                      , -Inf        , Inf         , 0.0056         , 1           ,       0 , "Characterization Laboratory Standard Reference Substance repeatability (0.56 %)"
   )
 
   reproducibility <- tibble::tribble(
-    ~sample_type                    , ~temp_min_c , ~temp_max_c , ~coefficient_a , ~exponent_b , ~offset , ~notes                                                                        ,
-    "base_oil"                      ,          40 ,          40 , 0.0136         , 1           ,       0 , "D445-26 17.2.2: base oils at 40 C (1.36 %)"                                  ,
-    "base_oil"                      ,         100 ,         100 , 0.0190         , 1           ,       0 , "D445-26 17.2.2: base oils at 100 C (1.90 %)"                                 ,
-    "formulated_oil"                ,          40 ,          40 , 0.0122         , 1           ,       0 , "D445-26 17.2.2: formulated oils at 40 C (1.22 %)"                            ,
-    "formulated_oil"                ,         100 ,         100 , 0.0138         , 1           ,       0 , "D445-26 17.2.2: formulated oils at 100 C (1.38 %)"                           ,
-    "formulated_oil"                ,         150 ,         150 , 0.018          , 1           ,       0 , "D445-26 17.2.2: formulated oils at 150 C (1.8 %)"                            ,
-    "petroleum_wax"                 ,         100 ,         100 , 0.0366         , 1.2         ,       0 , "D445-26 17.2.2: petroleum wax at 100 C, 0.0366 x^1.2"                        ,
-    "residual_fuel_oil"             ,          50 ,          50 , 0.08461        , 1           ,       0 , "D445-26 17.2.2: residual fuel oils at 50 C (8.46 %)"                         ,
-    "residual_fuel_oil"             ,         100 ,         100 , 0.1206         , 1           ,       0 , "D445-26 17.2.2: residual fuel oils at 100 C (12.06 %)"                       ,
-    "additive"                      ,         100 ,         100 , 0.00862        , 1.1         ,       0 , "D445-26 17.2.2: additives at 100 C, 0.00862 x^1.1"                           ,
-    "gas_oil"                       ,          40 ,          40 , 0.0082         , 1           ,       1 , "D445-26 17.2.2: gas oils at 40 C, 0.0082 (x+1)"                              ,
-    "jet_fuel"                      ,         -20 ,         -20 , 0.04718        , 0           ,       0 , "D445-26 17.2.2: jet fuels at -20 C, fixed 0.04718 mm2/s"                     ,
-    "jet_fuel"                      ,         -40 ,         -40 , 0.005077       , 1.14        ,       0 , "D445-26 17.2.2: jet fuels at -40 C, 0.005077 x^1.14"                         ,
-    "kerosine_diesel_biodiesel"     ,          40 ,          40 , 0.0224         , 1           ,       0 , "D445-26 17.2.2: kerosine/diesel/biodiesel at 40 C, 0.0224 x (2.24 %)"        ,
-    "used_inservice_formulated_oil" ,          40 ,          40 , 0.000594       , 1.722       ,       0 , "D445-26 17.2.2: used in-service formulated oils at 40 C, 0.000594 x^1.722"   ,
-    "used_inservice_formulated_oil" ,         100 ,         100 , 0.003361       , 1.4633      ,       0 , "D445-26 17.2.2: used in-service formulated oils at 100 C, 0.003361 x^1.4633"
+    ~sample_type                    , ~temp_min_c , ~temp_max_c , ~coefficient_a , ~exponent_b , ~offset , ~notes                                                                              ,
+    "base_oil"                      ,          40 ,          40 , 0.0136         , 1           ,       0 , "D445-26 17.2.2: base oils at 40 C (1.36 %)"                                        ,
+    "base_oil"                      ,         100 ,         100 , 0.0190         , 1           ,       0 , "D445-26 17.2.2: base oils at 100 C (1.90 %)"                                       ,
+    "formulated_oil"                ,          40 ,          40 , 0.0122         , 1           ,       0 , "D445-26 17.2.2: formulated oils at 40 C (1.22 %)"                                  ,
+    "formulated_oil"                ,         100 ,         100 , 0.0138         , 1           ,       0 , "D445-26 17.2.2: formulated oils at 100 C (1.38 %)"                                 ,
+    "formulated_oil"                ,         150 ,         150 , 0.018          , 1           ,       0 , "D445-26 17.2.2: formulated oils at 150 C (1.8 %)"                                  ,
+    "petroleum_wax"                 ,         100 ,         100 , 0.0366         , 1.2         ,       0 , "D445-26 17.2.2: petroleum wax at 100 C, 0.0366 x^1.2"                              ,
+    "residual_fuel_oil"             ,          50 ,          50 , 0.08461        , 1           ,       0 , "D445-26 17.2.2: residual fuel oils at 50 C (8.46 %)"                               ,
+    "residual_fuel_oil"             ,         100 ,         100 , 0.1206         , 1           ,       0 , "D445-26 17.2.2: residual fuel oils at 100 C (12.06 %)"                             ,
+    "additive"                      ,         100 ,         100 , 0.00862        , 1.1         ,       0 , "D445-26 17.2.2: additives at 100 C, 0.00862 x^1.1"                                 ,
+    "gas_oil"                       ,          40 ,          40 , 0.0082         , 1           ,       1 , "D445-26 17.2.2: gas oils at 40 C, 0.0082 (x+1)"                                    ,
+    "jet_fuel"                      ,         -20 ,         -20 , 0.04718        , 0           ,       0 , "D445-26 17.2.2: jet fuels at -20 C, fixed 0.04718 mm2/s"                           ,
+    "jet_fuel"                      ,         -40 ,         -40 , 0.005077       , 1.14        ,       0 , "D445-26 17.2.2: jet fuels at -40 C, 0.005077 x^1.14"                               ,
+    "kerosine_diesel_biodiesel"     ,          40 ,          40 , 0.0224         , 1           ,       0 , "D445-26 17.2.2: kerosine/diesel/biodiesel at 40 C, 0.0224 x (2.24 %)"              ,
+    "used_inservice_formulated_oil" ,          40 ,          40 , 0.000594       , 1.722       ,       0 , "D445-26 17.2.2: used in-service formulated oils at 40 C, 0.000594 x^1.722"         ,
+    "used_inservice_formulated_oil" ,         100 ,         100 , 0.003361       , 1.4633      ,       0 , "D445-26 17.2.2: used in-service formulated oils at 100 C, 0.003361 x^1.4633"       ,
+    "standard"                      , -Inf        , Inf         , 0.0122         , 1           ,       0 , "Characterization Laboratory Standard Reference Substance reproducibility (1.22 %)"
   )
 
   determinability$metric <- "determinability"

@@ -233,3 +233,72 @@ test_that("reset_viscometer_use_count resets since-cleaning only", {
     expect_error(reset_viscometer_use_count("bad-id"), "no viscometer found")
   })
 })
+
+test_that("update_viscometer_factors updates factors and auto-generates a note", {
+  with_test_reference_db({
+    viscometer <- tibble::tibble(
+      viscometer_size = 11,
+      serial_number = "00011",
+      status = "active",
+      factor_40_top = 0.05,
+      factor_40_bottom = 0.06,
+      factor_100_top = 0.07,
+      factor_100_bottom = 0.08
+    )
+
+    add_test_viscometer(viscometer)
+
+    updated <- update_viscometer_factors(
+      "011-00011",
+      factor_40_top = 0.051,
+      factor_40_bottom = 0.061,
+      factor_100_top = 0.071,
+      factor_100_bottom = 0.081,
+      updated_by = "jsmith"
+    )
+
+    expect_equal(updated$factor_40_top[1], 0.051)
+    expect_equal(updated$factor_40_bottom[1], 0.061)
+    expect_equal(updated$factor_100_top[1], 0.071)
+    expect_equal(updated$factor_100_bottom[1], 0.081)
+    expect_match(updated$notes[1], "Updated .* by jsmith")
+
+    expect_error(
+      update_viscometer_factors(
+        "bad-id",
+        factor_40_top = 0.1,
+        factor_40_bottom = 0.1,
+        factor_100_top = 0.1,
+        factor_100_bottom = 0.1
+      ),
+      "no viscometer found"
+    )
+  })
+})
+
+test_that("update_viscometer_factors preserves a supplied note", {
+  with_test_reference_db({
+    viscometer <- tibble::tibble(
+      viscometer_size = 12,
+      serial_number = "00012",
+      status = "active",
+      factor_40_top = 0.05,
+      factor_40_bottom = 0.06,
+      factor_100_top = 0.07,
+      factor_100_bottom = 0.08
+    )
+
+    add_test_viscometer(viscometer)
+
+    updated <- update_viscometer_factors(
+      "012-00012",
+      factor_40_top = 0.051,
+      factor_40_bottom = 0.061,
+      factor_100_top = 0.071,
+      factor_100_bottom = 0.081,
+      notes = "Recalibrated after annual service"
+    )
+
+    expect_equal(updated$notes[1], "Recalibrated after annual service")
+  })
+})

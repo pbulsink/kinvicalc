@@ -227,26 +227,27 @@ build_sample_result <- function(
       "i" = "Unarchive the viscometer before using it for a calculation."
     ))
   }
-  # NOTE: the viscometer registry still stores separate "top"/"bottom"
-  # calibration factors from the original (non-conformant) design; D445/D446
-  # do not have a "top bulb" vs "bottom bulb" factor concept -- a viscometer
-  # has a single constant C used for both repeat flow-time measurements. This
-  # uses the "top" factor for both measurements as a stopgap. See the
-  # outstanding-issues summary for the recommended viscometer schema redesign.
-  factor <- resolve_calibration_factor(
+
+  factor_1 <- resolve_calibration_factor(
     viscometer,
     analysis_temperature_c,
     bulb = "top"
   )
 
+  factor_2 <- resolve_calibration_factor(
+    viscometer,
+    analysis_temperature_c,
+    bulb = "bottom"
+  )
+
   determination_1 <- calculate_kinematic_viscosity(
     time_1,
-    factor,
+    factor_1,
     min_flow_time_s = min_flow_time_s
   )
   determination_2 <- calculate_kinematic_viscosity(
     time_2,
-    factor,
+    factor_2,
     min_flow_time_s = min_flow_time_s
   )
 

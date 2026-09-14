@@ -107,6 +107,48 @@ test_that("pretty sample type labels are title-cased", {
   )
 })
 
+test_that("standard sample type has determinability/repeatability/reproducibility rules", {
+  with_test_reference_db({
+    rule_d <- get_sample_type_rule("standard", 40, metric = "determinability")
+    rule_r <- get_sample_type_rule("standard", 40, metric = "repeatability")
+    rule_R <- get_sample_type_rule("standard", 40, metric = "reproducibility")
+
+    expect_equal(rule_d$coefficient_a[1], 0.0037)
+    expect_equal(rule_r$coefficient_a[1], 0.0056)
+    expect_equal(rule_R$coefficient_a[1], 0.0122)
+
+    # -Inf/Inf temperature bounds: the standard rule applies at any
+    # analysis temperature, unlike ASTM-tabulated sample types.
+    expect_equal(
+      get_sample_type_rule(
+        "standard",
+        -40,
+        metric = "determinability"
+      )$coefficient_a[1],
+      0.0037
+    )
+    expect_equal(
+      get_sample_type_rule(
+        "standard",
+        150,
+        metric = "reproducibility"
+      )$coefficient_a[1],
+      0.0122
+    )
+  })
+})
+
+test_that("evaluate_determinability works for the standard sample type", {
+  with_test_reference_db({
+    out_pass <- evaluate_determinability("standard", 40, 5.0, 5.01)
+    expect_equal(out_pass$result, "pass")
+    expect_equal(out_pass$limit, 0.0037 * mean(c(5.0, 5.01)))
+
+    out_fail <- evaluate_determinability("standard", 40, 5.0, 5.5)
+    expect_equal(out_fail$result, "fail")
+  })
+})
+
 test_that("add_sample_type_rule stores and retrieves a custom rule", {
   rule <- tibble::tibble(
     sample_type = "custom_oil",

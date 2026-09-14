@@ -12,6 +12,7 @@ sample_type_choices_app <- function() {
       "kerosine_diesel_biodiesel",
       "jet_fuel",
       "unlisted",
+      "standard",
       "additive",
       "base_oil",
       "formulated_oil",
@@ -24,6 +25,7 @@ sample_type_choices_app <- function() {
       "Kerosine, Diesel, and Biodiesel",
       "Jet Fuel",
       "Unlisted",
+      "Standard Reference Material",
       "Additive",
       "Base Oil",
       "Formulated Oil",
@@ -65,8 +67,68 @@ viscometer_choices_app <- function(include_archived = FALSE) {
 
 `%||%` <- function(x, y) if (is.null(x)) y else x
 
+# Repeatability/reproducibility against a known Standard Reference Substance
+# value (e.g. Characterization Laboratory QA/QC standards) are centred on the
+# expected value itself, not on the average of the measured result and the
+# expected value -- unlike evaluate_repeatability()/evaluate_reproducibility(),
+# which compare two independent measured results and so use their average.
+evaluate_standard_check <- function(
+  sample_type,
+  analysis_temperature_c,
+  measured_value,
+  expected_value,
+  metric
+) {
+  rule <- kinvicalc::get_sample_type_rule(
+    sample_type,
+    analysis_temperature_c,
+    metric = metric
+  )
+  diff <- abs(measured_value - expected_value)
+  limit <- calculate_precision_limit(rule, expected_value)
+  passed <- diff <= limit
+
+  list(
+    difference = diff,
+    limit = limit,
+    result = if (passed) "pass" else "fail",
+    passed = passed
+  )
+}
+
+# Builds the HTML content of the "QA/QC" cell in the locked-results reporting
+# table. Standard reference samples show determinability, repeatability
+# (r), and reproducibility (R) pass/fail, each coloured independently;
+# other sample types show determinability only, matching prior behaviour.
+qa_qc_cell <- function(x) {
+  pass_fail_span <- function(label, passed) {
+    colour <- if (passed) "#1a7f37" else "#c0392b"
+    sprintf(
+      "<span style='color: %s;'>%s: %s</span>",
+      colour,
+      label,
+      if (passed) "Pass" else "Fail"
+    )
+  }
+
+  determ_passed <- identical(x$determinability_result, "pass")
+  lines <- pass_fail_span("Determ", determ_passed)
+
+  if (identical(x$sample_type, "standard") && !is.null(x$standard_check)) {
+    check <- x$standard_check
+    lines <- c(
+      lines,
+      pass_fail_span("r", isTRUE(check$repeatability$passed)),
+      pass_fail_span("R", isTRUE(check$reproducibility$passed))
+    )
+  }
+
+  paste(lines, collapse = "<br/>")
+}
+
 app_server <- function(input, output, session) {
   result <- shiny::reactiveVal(NULL)
+  standard_check <- shiny::reactiveVal(NULL)
   locked_results <- shiny::reactiveVal(list())
   maintenance_message <- shiny::reactiveVal("No maintenance action yet.")
   maintenance_refresh <- shiny::reactiveVal(0L)
@@ -88,6 +150,8 @@ app_server <- function(input, output, session) {
     user_id <- trimws(input$user_id %||% "")
     sample_id <- trimws(input$sample_id %||% "")
 
+    is_standard <- identical(input$sample_type, "standard")
+
     missing_fields <- c(
       if (!nzchar(user_id)) "user ID",
       if (!nzchar(sample_id)) "sample ID",
@@ -102,6 +166,12 @@ app_server <- function(input, output, session) {
       },
       if (is.null(input$time_2) || is.na(input$time_2) || input$time_2 <= 0) {
         "second flow time"
+      },
+      if (
+        is_standard &&
+          (is.null(input$expected_value) || is.na(input$expected_value))
+      ) {
+        "expected value"
       }
     )
 
@@ -149,7 +219,41 @@ app_server <- function(input, output, session) {
       } else {
         NULL
       }
-      list(status = "ok", result = computed, note = determinability_note)
+
+      standard_check <- NULL
+      if (
+        is_standard &&
+          !is.null(input$expected_value) &&
+          !is.na(input$expected_value)
+      ) {
+        expected_value <- input$expected_value
+        repeatability <- evaluate_standard_check(
+          sample_type = computed$sample_type,
+          analysis_temperature_c = computed$analysis_temperature_c,
+          measured_value = computed$kinematic_viscosity_cSt,
+          expected_value = expected_value,
+          metric = "repeatability"
+        )
+        reproducibility <- evaluate_standard_check(
+          sample_type = computed$sample_type,
+          analysis_temperature_c = computed$analysis_temperature_c,
+          measured_value = computed$kinematic_viscosity_cSt,
+          expected_value = expected_value,
+          metric = "reproducibility"
+        )
+        standard_check <- list(
+          expected_value = expected_value,
+          repeatability = repeatability,
+          reproducibility = reproducibility
+        )
+      }
+
+      list(
+        status = "ok",
+        result = computed,
+        note = determinability_note,
+        standard_check = standard_check
+      )
     } else if (inherits(computed, "condition")) {
       list(status = "error", message = conditionMessage(computed))
     } else {
@@ -161,17 +265,26 @@ app_server <- function(input, output, session) {
     attempt <- calc_attempt()
     if (identical(attempt$status, "ok")) {
       result(attempt$result)
+      standard_check(attempt$standard_check %||% NULL)
     } else {
       result(NULL)
+      standard_check(NULL)
     }
   })
 
   shiny::observeEvent(input$lock, {
     out <- result()
     if (!is.null(out) && !isTRUE(out$locked)) {
+      if (identical(out$sample_type, "standard")) {
+        out$standard_check <- standard_check()
+      }
       locked <- kinvicalc::lock_result(out)
       result(locked)
       locked_results(c(locked_results(), list(locked)))
+      # lock_result() increments viscometer use counters; refresh the
+      # Viscometers tab (table + dropdown choices) so "Uses Since Clean"
+      # and similar fields stay current without a separate maintenance action.
+      bump_maintenance_refresh()
       lock_message(
         sprintf(
           "Locked result for sample %s.",
@@ -210,6 +323,17 @@ app_server <- function(input, output, session) {
     ignoreInit = TRUE
   )
 
+  reset_new_viscometer_inputs <- function() {
+    shiny::updateNumericInput(session, "new_viscometer_size", value = NA)
+    shiny::updateTextInput(session, "new_serial_number", value = "")
+    shiny::updateNumericInput(session, "new_factor_40_top", value = NA)
+    shiny::updateNumericInput(session, "new_factor_40_bottom", value = NA)
+    shiny::updateNumericInput(session, "new_factor_100_top", value = NA)
+    shiny::updateNumericInput(session, "new_factor_100_bottom", value = NA)
+    shiny::updateTextInput(session, "new_added_by", value = "")
+    shiny::updateTextAreaInput(session, "new_notes", value = "")
+  }
+
   shiny::observeEvent(input$add_viscometer, {
     shiny::req(input$new_viscometer_size)
     shiny::req(input$new_serial_number)
@@ -241,13 +365,16 @@ app_server <- function(input, output, session) {
     existing_ids <- kinvicalc::list_viscometers()$viscometer_id
     if (viscometer_id %in% existing_ids) {
       shiny::showModal(shiny::modalDialog(
-        title = "Viscometer rejected",
+        title = "Confirm viscometer update",
         sprintf(
-          "Viscometer ID %s already exists in the registry. Entry was not saved.",
+          "Viscometer ID %s already exists in the registry. Update its calibration factors with the values entered above?",
           viscometer_id
         ),
         easyClose = TRUE,
-        footer = shiny::modalButton("OK")
+        footer = shiny::tagList(
+          shiny::modalButton("Cancel"),
+          shiny::actionButton("confirm_update_viscometer", "Update Factors")
+        )
       ))
       return(invisible(NULL))
     }
@@ -293,6 +420,63 @@ app_server <- function(input, output, session) {
     set_maintenance_message(
       sprintf("Added viscometer %s.", added$viscometer_id[1])
     )
+
+    reset_new_viscometer_inputs()
+  })
+
+  shiny::observeEvent(input$confirm_update_viscometer, {
+    shiny::removeModal()
+
+    viscometer_id <- tryCatch(
+      format_viscometer_id(
+        viscometer_size = input$new_viscometer_size,
+        serial_number = trimws(input$new_serial_number),
+        fn = "app_server"
+      ),
+      error = function(e) NULL
+    )
+    if (is.null(viscometer_id)) {
+      return(invisible(NULL))
+    }
+
+    updated <- tryCatch(
+      kinvicalc::update_viscometer_factors(
+        viscometer_id,
+        factor_40_top = input$new_factor_40_top,
+        factor_40_bottom = input$new_factor_40_bottom,
+        factor_100_top = input$new_factor_100_top,
+        factor_100_bottom = input$new_factor_100_bottom,
+        notes = if (nzchar(input$new_notes)) {
+          input$new_notes
+        } else {
+          NA_character_
+        },
+        updated_by = if (nzchar(input$new_added_by)) {
+          input$new_added_by
+        } else {
+          NA_character_
+        }
+      ),
+      error = function(e) {
+        shiny::showModal(shiny::modalDialog(
+          title = "Viscometer update rejected",
+          conditionMessage(e),
+          easyClose = TRUE,
+          footer = shiny::modalButton("OK")
+        ))
+        return(NULL)
+      }
+    )
+
+    if (is.null(updated)) {
+      return(invisible(NULL))
+    }
+
+    set_maintenance_message(
+      sprintf("Updated viscometer %s.", updated$viscometer_id[1])
+    )
+
+    reset_new_viscometer_inputs()
   })
 
   shiny::observeEvent(input$mark_cleaning, {
@@ -343,6 +527,61 @@ app_server <- function(input, output, session) {
     determinability_colour <- if (pass) "#1a7f37" else "#c0392b"
     determinability_label <- if (pass) "PASS" else "FAIL"
 
+    pass_fail_label <- function(passed) {
+      colour <- if (passed) "#1a7f37" else "#c0392b"
+      shiny::tags$strong(
+        style = sprintf("color: %s;", colour),
+        if (passed) "PASS" else "FAIL"
+      )
+    }
+
+    standard_section <- NULL
+    check <- standard_check()
+    if (identical(out$sample_type, "standard") && !is.null(check)) {
+      standard_section <- shiny::tagList(
+        shiny::tags$hr(),
+        shiny::tags$p(
+          shiny::tags$strong("Standard reference check "),
+          sprintf(
+            "(expected value: %s mm\u00B2/s):",
+            kinvicalc::format_significant(check$expected_value)
+          )
+        ),
+        shiny::tags$p(
+          "Repeatability -- measured: ",
+          sprintf(
+            "%s mm\u00B2/s",
+            kinvicalc::format_significant(check$repeatability$difference)
+          ),
+          "; permitted: ",
+          sprintf(
+            "%s mm\u00B2/s",
+            kinvicalc::format_significant(check$repeatability$limit)
+          )
+        ),
+        shiny::tags$p(
+          shiny::tags$strong("Repeatability: "),
+          pass_fail_label(check$repeatability$passed)
+        ),
+        shiny::tags$p(
+          "Reproducibility -- measured: ",
+          sprintf(
+            "%s mm\u00B2/s",
+            kinvicalc::format_significant(check$reproducibility$difference)
+          ),
+          "; permitted: ",
+          sprintf(
+            "%s mm\u00B2/s",
+            kinvicalc::format_significant(check$reproducibility$limit)
+          )
+        ),
+        shiny::tags$p(
+          shiny::tags$strong("Reproducibility: "),
+          pass_fail_label(check$reproducibility$passed)
+        )
+      )
+    }
+
     shiny::tagList(
       shiny::tags$p(
         shiny::tags$strong("Viscosity 1: "),
@@ -381,7 +620,8 @@ app_server <- function(input, output, session) {
           determinability_label
         )
       ),
-      flag_note
+      flag_note,
+      standard_section
     )
   })
 
@@ -428,7 +668,7 @@ app_server <- function(input, output, session) {
             NA_character_
           },
           "Sample Type" = format_sample_type_label_app(x$sample_type),
-          "Analysis Temp (deg C)" = if (
+          "Analysis Temp (\u00b0 C)" = if (
             !is.null(x$analysis_temperature_c) &&
               !is.na(x$analysis_temperature_c)
           ) {
@@ -477,11 +717,7 @@ app_server <- function(input, output, session) {
           } else {
             NA_character_
           },
-          "Determinability" = if (identical(x$determinability_result, "pass")) {
-            "Pass"
-          } else {
-            "False"
-          },
+          "QA/QC" = qa_qc_cell(x),
           "Analysis Date/Time" = if (!is.null(x$created_at)) {
             format(x$created_at, "%Y-%m-%d\n%H:%M:%S")
           } else {
@@ -497,14 +733,14 @@ app_server <- function(input, output, session) {
         return(data.frame(
           "Sample Name" = character(0),
           "Sample Type" = character(0),
-          "Analysis Temp (deg C)" = character(0),
+          "Analysis Temp (\u00b0 C)" = character(0),
           "Viscometer ID" = character(0),
           "t 1 (s)" = character(0),
           "t 2 (s)" = character(0),
           "Visc 1 (mm\u00B2/s)" = character(0),
           "Visc 2 (mm\u00B2/s)" = character(0),
           "Average Visc" = character(0),
-          "Determinability" = character(0),
+          "QA/QC" = character(0),
           "Analysis Date/Time" = character(0),
           "Analyst" = character(0),
           check.names = FALSE,
@@ -516,7 +752,8 @@ app_server <- function(input, output, session) {
     },
     striped = FALSE,
     bordered = FALSE,
-    spacing = "s"
+    spacing = "s",
+    sanitize.text.function = function(str) str
   )
 
   output$new_viscometer_id_preview <- shiny::renderUI({
@@ -540,6 +777,33 @@ app_server <- function(input, output, session) {
         )
       }
     )
+  })
+
+  new_viscometer_id_reactive <- shiny::reactive({
+    tryCatch(
+      format_viscometer_id(
+        viscometer_size = input$new_viscometer_size,
+        serial_number = trimws(input$new_serial_number %||% ""),
+        fn = "app_server"
+      ),
+      error = function(e) NA_character_
+    )
+  })
+
+  new_viscometer_exists <- shiny::reactive({
+    viscometer_id <- new_viscometer_id_reactive()
+    if (is.na(viscometer_id) || !nzchar(viscometer_id)) {
+      return(FALSE)
+    }
+    viscometer_id %in% kinvicalc::list_viscometers()$viscometer_id
+  })
+
+  output$add_viscometer_button <- shiny::renderUI({
+    if (isTRUE(new_viscometer_exists())) {
+      shiny::actionButton("add_viscometer", "Update Viscometer Factors")
+    } else {
+      shiny::actionButton("add_viscometer", "Add to registry")
+    }
   })
 
   output$maintenance_status <- shiny::renderUI({
@@ -710,6 +974,16 @@ run_app <- function() {
                 "Sample type",
                 choices = sample_type_choices_app()
               ),
+              shiny::conditionalPanel(
+                condition = "input.sample_type == 'standard'",
+                shiny::numericInput(
+                  "expected_value",
+                  "Expected Value (mm\u00B2/s)",
+                  value = NA,
+                  min = 0,
+                  step = 0.01
+                )
+              ),
               shiny::numericInput(
                 "analysis_temperature_c",
                 "Analysis temperature (\u00b0C)",
@@ -796,7 +1070,7 @@ run_app <- function() {
               shiny::numericInput(
                 "new_viscometer_size",
                 "Viscometer size",
-                value = 10,
+                value = NA,
                 min = 1,
                 max = 999,
                 step = 1
@@ -804,7 +1078,7 @@ run_app <- function() {
               shiny::textInput(
                 "new_serial_number",
                 "Serial number",
-                value = "00010"
+                value = ""
               ),
               shiny::uiOutput("new_viscometer_id_preview"),
               shiny::textInput("new_added_by", "Added by", value = ""),
@@ -814,30 +1088,30 @@ run_app <- function() {
               shiny::numericInput(
                 "new_factor_40_top",
                 "Factor at 40 \u00b0C (top)",
-                value = 0.025,
+                value = NA,
                 min = 0
               ),
               shiny::numericInput(
                 "new_factor_40_bottom",
                 "Factor at 40 \u00b0C (bottom)",
-                value = 0.025,
+                value = NA,
                 min = 0
               ),
               shiny::numericInput(
                 "new_factor_100_top",
                 "Factor at 100 \u00b0C (top)",
-                value = 0.025,
+                value = NA,
                 min = 0
               ),
               shiny::numericInput(
                 "new_factor_100_bottom",
                 "Factor at 100 \u00b0C (bottom)",
-                value = 0.025,
+                value = NA,
                 min = 0
               )
             )
           ),
-          shiny::actionButton("add_viscometer", "Add to registry"),
+          shiny::uiOutput("add_viscometer_button"),
           shiny::hr(),
           shiny::selectInput(
             "cleaning_viscometer_id",
