@@ -20,4 +20,8 @@ to-even, matching R's native \code{round()} behaviour (IEC 60559), so this is a
 thin, explicit wrapper used consistently at the point each reported value
 is produced.
 }
+\examples{
+kinvicalc:::round_half_even(2.5, 0)
+kinvicalc:::round_half_even(3.14159, 2)
+}
 \keyword{internal}

@@ -15,3 +15,16 @@ The validated viscometer tibble.
 \description{
 Checks that a viscometer record contains all required columns and valid values.
 }
+\examples{
+validate_viscometer_record(
+  tibble::tibble(
+    viscometer_size = 75,
+    serial_number = "294",
+    status = "active",
+    factor_40_top = 0.00842,
+    factor_40_bottom = 0.00609,
+    factor_100_top = 0.00847,
+    factor_100_bottom = 0.00614
+  )
+)
+}

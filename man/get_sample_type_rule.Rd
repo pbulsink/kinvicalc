@@ -33,3 +33,10 @@ silently replaced by the fallback -- that still errors, since transcription
 of that cell could not be confirmed and using the "unlisted" limit in its
 place could mask an ASTM-defined value that differs from the fallback.
 }
+\examples{
+old_opt <- options(kinvicalc.reference_db_path = tempfile(fileext = ".db"))
+
+get_sample_type_rule("base_oil", 40, metric = "determinability")
+
+options(old_opt)
+}

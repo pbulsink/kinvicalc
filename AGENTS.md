@@ -18,9 +18,9 @@ All calculation logic is documented against ASTM D445-26 (kinematic viscosity te
 No `.github/` CI workflows are currently configured.
 
 ### R/ (Source Code)
-- `app.R` - Shiny app entry point: two-flow-time measurement form, result rendering and locking, viscometer add/update form with confirmation modal, standard-sample QA/QC check and colour-coded reporting cell
+- `app.R` - Shiny app entry point: two-flow-time measurement form, result rendering and locking, viscometer add/update form with confirmation modal, standard-sample QA/QC check and colour-coded reporting cell. **Must contain only function definitions at top level** — see "Running the app" below.
 - `calculation-core.R` - ASTM viscosity calculation (`nu = C * t`, no kinetic energy/E correction); SQLite reference DB connection, schema creation, and default-rule seeding
-- `data-models.R` - Required-field validation for viscometer/sample-rule records; assembles the `kinvicalc_result` object from two determinations plus the determinability check
+- `data-models.R` - Required-field validation for viscometer/sample-rule records; `build_viscometer_record()` constructor for registry-ready viscometer tibbles; assembles the `kinvicalc_result` object from two determinations plus the determinability check
 - `reporting.R` - Primary and high-density report rendering (HTML/text), session results table, result locking state
 - `sample-types.R` - Precision rule lookup/upsert and determinability/repeatability/reproducibility evaluation (D445-26 Section 17), including the `"standard"` reference-sample rule set
 - `utils.R` - Internal validation asserts, significant-figure formatting, default precision-rule seed data; no exports
@@ -33,6 +33,24 @@ testthat edition 3 (`Config/testthat/edition: 3`). Each test file matches the mo
 - `test-sample-types.R` - precision limits for all four formula forms (linear, offset, power-law, fixed), unverified-cell error, custom rule upsert/retrieval, `"standard"` rule lookup and determinability across the full temperature range
 - `test-viscometer.R` - ID pattern validation (including alphanumeric serial numbers), registry add/get/remove round trips, `update_viscometer_factors()` factor correction and auto-generated/preserved notes
 - `test-app.R` - `evaluate_standard_check()` centering on the expected value (not the measured/expected average), `qa_qc_cell()` rendering for standard vs. non-standard sample types, and `shiny::testServer()` coverage of the standard-sample workflow (missing expected-value validation, pass/fail r/R display, locked-results table)
+- `test-app-source-integrity.R` - Structural (source-scanning) guards for `R/app.R`: no top-level side-effecting code, every cross-file helper called namespace-qualified, `run_app()` actually exported, and `inst/shiny/app.R` remaining a thin `run_app()` delegator that yields a `shiny.appobj`. See "Running the app" below.
+
+## Running the app
+
+Launch the app via the exported `kinvicalc::run_app()`, or by running the thin launcher [inst/shiny/app.R](inst/shiny/app.R) (the only file that may be used with Positron/RStudio's "Run App" button, `shiny::runApp()`, or a Shiny Server / shinyapps.io deploy).
+
+Never `source("R/app.R")`, never use the "Run App" button on `R/app.R`, and never call `shiny::runApp("R/app.R")`.
+
+Those paths evaluate the file in the **global environment** rather than the package namespace, where package-internal helpers are invisible. That produced the recurring runtime error `could not find function "format_viscometer_id"` (surfaced in the UI as the "Viscometer rejected" modal). Two defects made it possible, both now fixed and both regression-tested:
+
+1. `R/app.R` ended with a top-level `app <- run_app()`, turning the file into a runnable single-file Shiny app and inviting the source-the-file workflow. Top-level executable code in `R/app.R` is now forbidden.
+2. The `@export` roxygen block for `run_app()` was misplaced above `format_sample_type_label_app()`, so `run_app` was never exported and users had no supported way to start the app.
+
+Rules to preserve:
+- `R/app.R` contains function definitions only — no top-level statements. Removing the top-level `app <- run_app()` means `shiny::runApp("R/app.R")` now correctly fails with "app.R did not return a shiny.appobj object"; use `inst/shiny/app.R` instead of re-adding that line.
+- `inst/shiny/app.R` must stay a thin delegator — `library(kinvicalc)` plus `kinvicalc::run_app()`, nothing more. Copying app logic into it reintroduces the out-of-namespace bug.
+- Any helper defined in another `R/*.R` file must be called from `R/app.R` as `kinvicalc::fn()` (exported) or `kinvicalc:::fn()` (internal, e.g. `calculate_precision_limit()`), never bare. Behavioural `testServer()` tests cannot catch bare calls, because inside the namespace they always resolve.
+- Keep each roxygen block directly above the function it documents; a misplaced block silently drops the export.
 
 No test file yet exists for `reporting.R`.
 
@@ -47,7 +65,7 @@ The package is organized as one file per capability area around a single local S
 |------|------|---------------|
 | `app.R` | Shiny UI and server for interactive measurement, calculation, and result locking; viscometer registry add/update form; standard-sample QA/QC display | `run_app()` |
 | `calculation-core.R` | ASTM D445/D446 viscosity calculation (`nu = C * t`, no kinetic energy/E correction) and SQLite reference DB access/initialization | `calculate_kinematic_viscosity()`, `save_reference_data()`, `load_reference_data()` |
-| `data-models.R` | Record validation and assembly of the result object from two determinations, each resolved against its own bulb's calibration factor | `build_sample_result()`, `validate_viscometer_record()`, `validate_sample_type_rule()` |
+| `data-models.R` | Record validation and assembly of the result object from two determinations, each resolved against its own bulb's calibration factor | `build_sample_result()`, `build_viscometer_record()`, `validate_viscometer_record()`, `validate_sample_type_rule()` |
 | `reporting.R` | Intermediate report rendering, session results table, and lock state (5 sig. figs default; round to 4 for final client reports per D445-26 15.1) | `render_primary_report()`, `render_high_density_report()`, `lock_result()`, `session_results_table()` |
 | `sample-types.R` | Precision rule management and the three ASTM precision evaluations, limit = a * (average + offset)^b; includes the `"standard"` reference-sample rule (temperature-unbounded) | `get_sample_type_rule()`, `add_sample_type_rule()`, `evaluate_determinability()`, `evaluate_repeatability()`, `evaluate_reproducibility()` |
 | `utils.R` | Shared internal infrastructure; no exports (validators used across all modules) | internals: `.default_sample_rules()`, `.default_reference_db()`, `assert_scalar_numeric()`, `format_significant()`, `round_half_even()` |

@@ -17,4 +17,12 @@ The numeric precision limit, mm2/s.
 \description{
 Calculate a precision limit from a rule and a compared value.
 }
+\examples{
+old_opt <- options(kinvicalc.reference_db_path = tempfile(fileext = ".db"))
+
+rule <- get_sample_type_rule("base_oil", 40, metric = "determinability")
+kinvicalc:::calculate_precision_limit(rule, average_value = 5.5)
+
+options(old_opt)
+}
 \keyword{internal}

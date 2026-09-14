@@ -23,3 +23,15 @@ Per ASTM D445-26 17.2.1, repeatability compares two independent \emph{results}
 (each already the average of two determined values) obtained by the same
 operator/lab/apparatus on identical material within a short time interval.
 }
+\examples{
+old_opt <- options(kinvicalc.reference_db_path = tempfile(fileext = ".db"))
+
+evaluate_repeatability(
+  sample_type = "base_oil",
+  analysis_temperature_c = 40,
+  result_1 = 5.80,
+  result_2 = 5.75
+)
+
+options(old_opt)
+}

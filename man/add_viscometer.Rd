@@ -16,3 +16,19 @@ The inserted viscometer record.
 New records initialize \code{use_count_since_cleaning} and \code{total_use_count} to 0,
 and \code{last_deep_cleaned_at} to \code{NA}.
 }
+\examples{
+old_opt <- options(kinvicalc.reference_db_path = tempfile(fileext = ".db"))
+
+add_viscometer(
+  build_viscometer_record(
+    viscometer_size = 1,
+    serial_number = "00001",
+    factor_40_top = 0.025,
+    factor_40_bottom = 0.029,
+    factor_100_top = 0.016,
+    factor_100_bottom = 0.018
+  )
+)
+
+options(old_opt)
+}

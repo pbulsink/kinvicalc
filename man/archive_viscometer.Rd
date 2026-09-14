@@ -15,3 +15,20 @@ The updated viscometer record.
 \description{
 Archive a viscometer in the local registry.
 }
+\examples{
+old_opt <- options(kinvicalc.reference_db_path = tempfile(fileext = ".db"))
+
+add_viscometer(
+  build_viscometer_record(
+    viscometer_size = 1,
+    serial_number = "00001",
+    factor_40_top = 0.025,
+    factor_40_bottom = 0.029,
+    factor_100_top = 0.016,
+    factor_100_bottom = 0.018
+  )
+)
+archive_viscometer("001-00001")
+
+options(old_opt)
+}

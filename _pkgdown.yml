@@ -1,0 +1,109 @@
+url: https://pbulsink.github.io/kinvicalc/
+
+template:
+  bootstrap: 5
+  bootswatch: flatly
+
+development:
+  mode: auto
+
+home:
+  title: "kinvicalc: ASTM D445-26 / D446-24 Kinematic Viscosity Workflows"
+  description: >
+    Calculation, validation, precision checks, a local viscometer/sample-type
+    registry, and Shiny reporting for glass capillary kinematic viscosity
+    testing.
+
+navbar:
+  structure:
+    left: [intro, reference, articles, news]
+    right: [search, github]
+  components:
+    articles:
+      text: Articles
+      menu:
+      - text: Get started
+        href: articles/kinvicalc-workflows.html
+      - text: A tour of the Shiny app
+        href: articles/kinvicalc_app_tour.html
+      - text: Updating precision (determinability/repeatability/reproducibility) values
+        href: articles/updating_precision_values.html
+
+articles:
+- title: Articles
+  navbar: ~
+  contents:
+  - kinvicalc-workflows
+  - kinvicalc_app_tour
+  - updating_precision_values
+
+reference:
+- title: Calculating kinematic viscosity
+  desc: >
+    Core ASTM D445-26 Eq 2 / D446-24 Eq 5 calculation (`nu = C * t`), and the
+    full two-determination workflow that resolves calibration factors,
+    calculates both determinations, and checks determinability in one call.
+  contents:
+  - calculate_kinematic_viscosity
+  - build_sample_result
+
+- title: Viscometer registry
+  desc: >
+    Add, look up, and maintain viscometers in the local SQLite registry,
+    including archiving, use-count tracking, and in-place calibration-factor
+    correction.
+  contents:
+  - build_viscometer_record
+  - validate_viscometer_record
+  - validate_viscometer
+  - format_viscometer_id
+  - add_viscometer
+  - get_viscometer
+  - list_viscometers
+  - list_active_viscometers
+  - list_archived_viscometers
+  - archive_viscometer
+  - unarchive_viscometer
+  - remove_viscometer
+  - update_viscometer_factors
+  - resolve_calibration_factor
+  - increment_viscometer_use
+  - reset_viscometer_use_count
+  - get_viscometer_use_summary
+
+- title: Precision checks (determinability, repeatability, reproducibility)
+  desc: >
+    ASTM D445-26 Section 17 precision rules and the checks that compare
+    measured values against them.
+  contents:
+  - validate_sample_type_rule
+  - get_sample_type_rule
+  - add_sample_type_rule
+  - evaluate_determinability
+  - evaluate_repeatability
+  - evaluate_reproducibility
+
+- title: Reporting and session state
+  desc: >
+    Render sample and session reports, lock results once reviewed, and
+    format numeric/label output for display.
+  contents:
+  - render_primary_report
+  - render_high_density_report
+  - lock_result
+  - session_results_table
+  - format_significant
+
+- title: Reference data storage
+  desc: >
+    Save and load the local SQLite registry (viscometers and sample-type
+    precision rules) as a whole.
+  contents:
+  - save_reference_data
+  - load_reference_data
+
+- title: Shiny application
+  desc: Launch the interactive measurement and registry-maintenance app.
+  contents:
+  - run_app
+  - format_sample_type_label_app

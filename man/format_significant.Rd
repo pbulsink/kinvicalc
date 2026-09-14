@@ -20,3 +20,7 @@ A character string with \code{x} rounded to \code{digits} significant figures.
 \description{
 Format a numeric value to at least a given number of significant figures.
 }
+\examples{
+format_significant(5.545, 5)
+format_significant(5.545, 4)
+}

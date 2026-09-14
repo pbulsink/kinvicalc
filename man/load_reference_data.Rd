@@ -12,3 +12,12 @@ A list containing viscometers and sample_types.
 \description{
 Load reference data from the local database.
 }
+\examples{
+# Use a temporary registry so the example does not touch the real
+# user-level reference.db.
+old_opt <- options(kinvicalc.reference_db_path = tempfile(fileext = ".db"))
+
+load_reference_data()$sample_types
+
+options(old_opt)
+}

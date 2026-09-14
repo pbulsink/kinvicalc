@@ -16,3 +16,21 @@ The inserted rule.
 \description{
 Add or replace a sample type precision rule.
 }
+\examples{
+old_opt <- options(kinvicalc.reference_db_path = tempfile(fileext = ".db"))
+
+add_sample_type_rule(
+  tibble::tibble(
+    sample_type = "custom_oil",
+    metric = "determinability",
+    temp_min_c = 40,
+    temp_max_c = 40,
+    coefficient_a = 0.0040,
+    exponent_b = 1,
+    offset = 0,
+    notes = "Example custom rule"
+  )
+)
+
+options(old_opt)
+}

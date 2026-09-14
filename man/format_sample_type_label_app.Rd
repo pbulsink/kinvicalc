@@ -2,13 +2,24 @@
 % Please edit documentation in R/app.R
 \name{format_sample_type_label_app}
 \alias{format_sample_type_label_app}
-\title{Run the kinvicalc Shiny application.}
+\title{Format a sample type code as a human-readable label.}
 \usage{
+format_sample_type_label_app(sample_type)
+
 format_sample_type_label_app(sample_type)
 }
 \arguments{
 \item{sample_type}{A sample type code.}
 }
+\value{
+A character scalar title-case label, e.g. \code{"base_oil"} becomes
+\code{"Base Oil"}.
+}
 \description{
-Run the kinvicalc Shiny application.
+Format a sample type code as a human-readable label.
+
+Format a sample type code as a human-readable label.
+}
+\examples{
+format_sample_type_label_app("base_oil")
 }

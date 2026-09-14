@@ -12,3 +12,10 @@ A tibble of non-archived viscometer records.
 \description{
 List active viscometers in the local registry.
 }
+\examples{
+old_opt <- options(kinvicalc.reference_db_path = tempfile(fileext = ".db"))
+
+list_active_viscometers()
+
+options(old_opt)
+}

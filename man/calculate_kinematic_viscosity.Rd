@@ -34,3 +34,7 @@ instead, when \code{time_s} is below \code{min_flow_time_s}, the result is flagg
 (\code{low_flow_time_flag}) so it can be surfaced in reports for operator
 review, per ASTM D445-26 6.1.2/10.2.
 }
+\examples{
+calculate_kinematic_viscosity(time_s = 232, factor = 0.025)
+calculate_kinematic_viscosity(time_s = 150, factor = 0.025)
+}

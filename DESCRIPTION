@@ -19,9 +19,11 @@ Imports:
     RSQLite
 Suggests:
     knitr,
+    pkgdown,
     rmarkdown,
     testthat (>= 3.0.0),
     withr
 VignetteBuilder: knitr
 Config/testthat/edition: 3
 Config/roxygen2/version: 8.1.0
+URL: https://pbulsink.github.io/kinvicalc/

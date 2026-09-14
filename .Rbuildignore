@@ -10,3 +10,6 @@
 ^D446-24\.pdf$
 ^coverage\.xml$
 ^cobertura\.xml$
+^_pkgdown\.yml$
+^docs$
+^pkgdown$

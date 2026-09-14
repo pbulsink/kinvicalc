@@ -55,3 +55,30 @@ energy correction; instead, any flow time below \code{min_flow_time_s} is
 flagged (\code{low_flow_time_flag}) so it can be surfaced in reports for
 operator review (ASTM D445-26 6.1.2/10.2).
 }
+\examples{
+# Use a temporary registry so the example does not touch the real
+# user-level reference.db.
+old_opt <- options(kinvicalc.reference_db_path = tempfile(fileext = ".db"))
+
+add_viscometer(
+  build_viscometer_record(
+    viscometer_size = 1,
+    serial_number = "00001",
+    factor_40_top = 0.025,
+    factor_40_bottom = 0.029,
+    factor_100_top = 0.016,
+    factor_100_bottom = 0.018
+  )
+)
+
+result <- build_sample_result(
+  viscometer_id = "001-00001",
+  sample_type = "unlisted",
+  analysis_temperature_c = 40,
+  time_1 = 232,
+  time_2 = 200
+)
+result$kinematic_viscosity_cSt
+
+options(old_opt)
+}

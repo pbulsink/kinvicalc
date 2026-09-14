@@ -19,7 +19,19 @@ number of uses since the last deep cleaning and the overall lifetime use
 count.
 }
 \examples{
-\dontrun{
+old_opt <- options(kinvicalc.reference_db_path = tempfile(fileext = ".db"))
+
+add_viscometer(
+  build_viscometer_record(
+    viscometer_size = 7,
+    serial_number = "00007",
+    factor_40_top = 0.025,
+    factor_40_bottom = 0.029,
+    factor_100_top = 0.016,
+    factor_100_bottom = 0.018
+  )
+)
 get_viscometer_use_summary("007-00007")
-}
+
+options(old_opt)
 }

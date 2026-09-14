@@ -16,3 +16,16 @@ The validated rule tibble.
 \description{
 Validate a sample-type precision rule.
 }
+\examples{
+validate_sample_type_rule(
+  tibble::tibble(
+    sample_type = "base_oil",
+    metric = "determinability",
+    temp_min_c = 40,
+    temp_max_c = 40,
+    coefficient_a = 0.0037,
+    exponent_b = 1,
+    offset = 0
+  )
+)
+}

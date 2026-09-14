@@ -28,3 +28,15 @@ Per ASTM D445-26 11.2.3/14.1, determinability compares the two \emph{determined}
 kinematic viscosity values (not the raw flow times) that are averaged to
 produce one reported result.
 }
+\examples{
+old_opt <- options(kinvicalc.reference_db_path = tempfile(fileext = ".db"))
+
+evaluate_determinability(
+  sample_type = "base_oil",
+  analysis_temperature_c = 40,
+  viscosity_1 = 5.80,
+  viscosity_2 = 5.79
+)
+
+options(old_opt)
+}

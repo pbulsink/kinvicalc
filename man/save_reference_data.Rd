@@ -17,3 +17,12 @@ Invisibly TRUE when saved.
 \description{
 Save reference data to the local database.
 }
+\examples{
+# Use a temporary registry so the example does not touch the real
+# user-level reference.db.
+old_opt <- options(kinvicalc.reference_db_path = tempfile(fileext = ".db"))
+
+save_reference_data(sample_types = kinvicalc:::.default_sample_rules())
+
+options(old_opt)
+}

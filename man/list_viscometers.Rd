@@ -13,3 +13,10 @@ A tibble of viscometer records.
 Includes use counters (\code{use_count_since_cleaning}, \code{total_use_count}) and
 the most recent deep-clean timestamp (\code{last_deep_cleaned_at}) when available.
 }
+\examples{
+old_opt <- options(kinvicalc.reference_db_path = tempfile(fileext = ".db"))
+
+list_viscometers()
+
+options(old_opt)
+}

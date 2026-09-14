@@ -21,3 +21,33 @@ Invisibly the result object.
 \description{
 Render a primary sample report.
 }
+\examples{
+old_opt <- options(kinvicalc.reference_db_path = tempfile(fileext = ".db"))
+
+add_viscometer(
+  build_viscometer_record(
+    viscometer_size = 1,
+    serial_number = "00001",
+    factor_40_top = 0.025,
+    factor_40_bottom = 0.029,
+    factor_100_top = 0.016,
+    factor_100_bottom = 0.018
+  )
+)
+result <- build_sample_result(
+  viscometer_id = "001-00001",
+  sample_type = "unlisted",
+  analysis_temperature_c = 40,
+  time_1 = 232,
+  time_2 = 200
+)
+
+# Print to console (no output_path -> no file written)
+render_primary_report(result)
+
+# Write an HTML report to a file
+report_path <- tempfile(fileext = ".html")
+render_primary_report(result, output_path = report_path)
+
+options(old_opt)
+}

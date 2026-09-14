@@ -36,7 +36,19 @@ of the form \code{"Updated YYYY-MM-DD by <updated_by>"} is recorded so the
 correction is traceable.
 }
 \examples{
-\dontrun{
+old_opt <- options(kinvicalc.reference_db_path = tempfile(fileext = ".db"))
+
+add_viscometer(
+  build_viscometer_record(
+    viscometer_size = 7,
+    serial_number = "00007",
+    factor_40_top = 0.025,
+    factor_40_bottom = 0.029,
+    factor_100_top = 0.016,
+    factor_100_bottom = 0.018
+  )
+)
+
 update_viscometer_factors(
   "007-00007",
   factor_40_top = 0.0251,
@@ -45,5 +57,6 @@ update_viscometer_factors(
   factor_100_bottom = 0.0251,
   updated_by = "jsmith"
 )
-}
+
+options(old_opt)
 }

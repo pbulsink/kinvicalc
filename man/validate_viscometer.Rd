@@ -15,3 +15,7 @@ TRUE if valid, otherwise FALSE.
 \description{
 Validate a viscometer identifier.
 }
+\examples{
+validate_viscometer("200-12345")
+validate_viscometer("not-an-id")
+}

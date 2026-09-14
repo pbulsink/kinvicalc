@@ -27,3 +27,15 @@ A list containing the difference, rule limit, and pass/fail status.
 Per ASTM D445-26 17.2.2, reproducibility compares two independent results
 obtained by different operators in different laboratories.
 }
+\examples{
+old_opt <- options(kinvicalc.reference_db_path = tempfile(fileext = ".db"))
+
+evaluate_reproducibility(
+  sample_type = "base_oil",
+  analysis_temperature_c = 40,
+  result_1 = 5.80,
+  result_2 = 5.70
+)
+
+options(old_opt)
+}
