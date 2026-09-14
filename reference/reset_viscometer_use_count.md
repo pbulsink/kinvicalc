@@ -47,7 +47,7 @@ reset_viscometer_use_count("007-00007")
 #> # A tibble: 1 × 4
 #>   viscometer_id use_count_since_cleaning total_use_count last_deep_cleaned_at
 #>   <chr>                            <int>           <int> <chr>               
-#> 1 007-00007                            0               1 2026-09-14 15:22:11 
+#> 1 007-00007                            0               1 2026-09-14 16:01:00 
 
 options(old_opt)
 ```
