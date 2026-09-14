@@ -139,3 +139,114 @@ test_that("build_sample_result warns when determinability fails", {
     )
   })
 })
+
+test_that("build_viscometer_record assembles a complete, valid record", {
+  record <- build_viscometer_record(
+    viscometer_size = 75,
+    serial_number = "294",
+    factor_40_top = 0.00842,
+    factor_40_bottom = 0.00609,
+    factor_100_top = 0.00847,
+    factor_100_bottom = 0.00614,
+    added_by = "analyst",
+    notes = "bench check"
+  )
+
+  expect_s3_class(record, "tbl_df")
+  expect_equal(nrow(record), 1)
+
+  # Serial numbers are zero-padded on the left to 5 characters.
+  expect_equal(record$viscometer_id[1], "075-00294")
+  expect_equal(record$viscometer_size[1], 75)
+  expect_equal(record$serial_number[1], "294")
+  expect_equal(record$status[1], "active")
+  expect_equal(record$factor_40_top[1], 0.00842)
+  expect_equal(record$factor_40_bottom[1], 0.00609)
+  expect_equal(record$factor_100_top[1], 0.00847)
+  expect_equal(record$factor_100_bottom[1], 0.00614)
+  expect_equal(record$added_by[1], "analyst")
+  expect_equal(record$notes[1], "bench check")
+})
+
+test_that("build_viscometer_record supplies every column add_viscometer needs", {
+  record <- build_viscometer_record(
+    viscometer_size = 4,
+    serial_number = "00004",
+    factor_40_top = 0.025,
+    factor_40_bottom = 0.025,
+    factor_100_top = 0.025,
+    factor_100_bottom = 0.025
+  )
+
+  expect_true(all(
+    kinvicalc:::viscometer_required_fields %in% names(record)
+  ))
+
+  # Optional fields default to NA rather than being dropped.
+  expect_true(is.na(record$added_by[1]))
+  expect_true(is.na(record$notes[1]))
+  expect_equal(record$status[1], "active")
+})
+
+test_that("build_viscometer_record output round-trips through add_viscometer", {
+  with_test_reference_db({
+    record <- build_viscometer_record(
+      viscometer_size = 8,
+      serial_number = "A12",
+      factor_40_top = 0.025,
+      factor_40_bottom = 0.026,
+      factor_100_top = 0.027,
+      factor_100_bottom = 0.028,
+      added_by = "analyst"
+    )
+
+    cleanup_test_viscometer(record$viscometer_id[1])
+    added <- add_viscometer(record)
+
+    expect_equal(added$viscometer_id[1], "008-00A12")
+    expect_equal(added$factor_40_bottom[1], 0.026)
+    expect_equal(added$added_by[1], "analyst")
+  })
+})
+
+test_that("build_viscometer_record rejects invalid inputs", {
+  valid_factors <- list(
+    factor_40_top = 0.025,
+    factor_40_bottom = 0.025,
+    factor_100_top = 0.025,
+    factor_100_bottom = 0.025
+  )
+  build <- function(...) {
+    do.call(build_viscometer_record, c(list(...), valid_factors))
+  }
+
+  expect_error(
+    build(viscometer_size = 1000, serial_number = "1"),
+    "viscometer_size"
+  )
+  expect_error(
+    build(viscometer_size = 0, serial_number = "1"),
+    "viscometer_size"
+  )
+  # Serial numbers must be alphanumeric and at most 5 characters.
+  expect_error(
+    build(viscometer_size = 9, serial_number = "123456"),
+    "serial_number"
+  )
+  expect_error(
+    build(viscometer_size = 9, serial_number = "12-34"),
+    "serial_number"
+  )
+
+  expect_error(
+    build_viscometer_record(
+      viscometer_size = 9,
+      serial_number = "1",
+      factor_40_top = NA_real_,
+      factor_40_bottom = 0.025,
+      factor_100_top = 0.025,
+      factor_100_bottom = 0.025
+    ),
+    "factor_40_top"
+  )
+})

@@ -35,6 +35,12 @@ precision_metrics <- c("determinability", "repeatability", "reproducibility")
 #'   "repeatability", or "reproducibility".
 #' @return A one-row tibble for the requested rule.
 #' @export
+#' @examples
+#' old_opt <- options(kinvicalc.reference_db_path = tempfile(fileext = ".db"))
+#'
+#' get_sample_type_rule("base_oil", 40, metric = "determinability")
+#'
+#' options(old_opt)
 get_sample_type_rule <- function(
   sample_type,
   analysis_temperature_c = 40,
@@ -96,6 +102,23 @@ get_sample_type_rule <- function(
 #'   for required columns).
 #' @return The inserted rule.
 #' @export
+#' @examples
+#' old_opt <- options(kinvicalc.reference_db_path = tempfile(fileext = ".db"))
+#'
+#' add_sample_type_rule(
+#'   tibble::tibble(
+#'     sample_type = "custom_oil",
+#'     metric = "determinability",
+#'     temp_min_c = 40,
+#'     temp_max_c = 40,
+#'     coefficient_a = 0.0040,
+#'     exponent_b = 1,
+#'     offset = 0,
+#'     notes = "Example custom rule"
+#'   )
+#' )
+#'
+#' options(old_opt)
 add_sample_type_rule <- function(rule) {
   rule <- validate_sample_type_rule(rule)
 
@@ -158,6 +181,13 @@ add_sample_type_rule <- function(rule) {
 #' @param average_value The average of the two values being compared, mm2/s.
 #' @return The numeric precision limit, mm2/s.
 #' @keywords internal
+#' @examples
+#' old_opt <- options(kinvicalc.reference_db_path = tempfile(fileext = ".db"))
+#'
+#' rule <- get_sample_type_rule("base_oil", 40, metric = "determinability")
+#' kinvicalc:::calculate_precision_limit(rule, average_value = 5.5)
+#'
+#' options(old_opt)
 calculate_precision_limit <- function(rule, average_value) {
   assert_scalar_numeric(
     average_value,
@@ -186,6 +216,17 @@ calculate_precision_limit <- function(rule, average_value) {
 #' @param viscosity_2 Second determined kinematic viscosity value, mm2/s.
 #' @return A list containing the difference, rule limit, and pass/fail status.
 #' @export
+#' @examples
+#' old_opt <- options(kinvicalc.reference_db_path = tempfile(fileext = ".db"))
+#'
+#' evaluate_determinability(
+#'   sample_type = "base_oil",
+#'   analysis_temperature_c = 40,
+#'   viscosity_1 = 5.80,
+#'   viscosity_2 = 5.79
+#' )
+#'
+#' options(old_opt)
 evaluate_determinability <- function(
   sample_type,
   analysis_temperature_c,
@@ -242,6 +283,17 @@ evaluate_determinability <- function(
 #' @param result_2 Second reported kinematic viscosity result, mm2/s.
 #' @return A list containing the difference, rule limit, and pass/fail status.
 #' @export
+#' @examples
+#' old_opt <- options(kinvicalc.reference_db_path = tempfile(fileext = ".db"))
+#'
+#' evaluate_repeatability(
+#'   sample_type = "base_oil",
+#'   analysis_temperature_c = 40,
+#'   result_1 = 5.80,
+#'   result_2 = 5.75
+#' )
+#'
+#' options(old_opt)
 evaluate_repeatability <- function(
   sample_type,
   analysis_temperature_c,
@@ -289,6 +341,17 @@ evaluate_repeatability <- function(
 #' @param result_2 Second reported kinematic viscosity result, mm2/s.
 #' @return A list containing the difference, rule limit, and pass/fail status.
 #' @export
+#' @examples
+#' old_opt <- options(kinvicalc.reference_db_path = tempfile(fileext = ".db"))
+#'
+#' evaluate_reproducibility(
+#'   sample_type = "base_oil",
+#'   analysis_temperature_c = 40,
+#'   result_1 = 5.80,
+#'   result_2 = 5.70
+#' )
+#'
+#' options(old_opt)
 evaluate_reproducibility <- function(
   sample_type,
   analysis_temperature_c,

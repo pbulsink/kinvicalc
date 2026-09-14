@@ -16,6 +16,35 @@
 #'   15.1).
 #' @return Invisibly the result object.
 #' @export
+#' @examples
+#' old_opt <- options(kinvicalc.reference_db_path = tempfile(fileext = ".db"))
+#'
+#' add_viscometer(
+#'   build_viscometer_record(
+#'     viscometer_size = 1,
+#'     serial_number = "00001",
+#'     factor_40_top = 0.025,
+#'     factor_40_bottom = 0.029,
+#'     factor_100_top = 0.016,
+#'     factor_100_bottom = 0.018
+#'   )
+#' )
+#' result <- build_sample_result(
+#'   viscometer_id = "001-00001",
+#'   sample_type = "unlisted",
+#'   analysis_temperature_c = 40,
+#'   time_1 = 232,
+#'   time_2 = 200
+#' )
+#'
+#' # Print to console (no output_path -> no file written)
+#' render_primary_report(result)
+#'
+#' # Write an HTML report to a file
+#' report_path <- tempfile(fileext = ".html")
+#' render_primary_report(result, output_path = report_path)
+#'
+#' options(old_opt)
 render_primary_report <- function(result, output_path = NULL, digits = 5) {
   if (is.null(result) || !inherits(result, "kinvicalc_result")) {
     cli::cli_abort(c(
@@ -87,6 +116,30 @@ render_primary_report <- function(result, output_path = NULL, digits = 5) {
 #' @param digits Minimum significant figures to report (default 5).
 #' @return Invisibly the results list.
 #' @export
+#' @examples
+#' old_opt <- options(kinvicalc.reference_db_path = tempfile(fileext = ".db"))
+#'
+#' add_viscometer(
+#'   build_viscometer_record(
+#'     viscometer_size = 1,
+#'     serial_number = "00001",
+#'     factor_40_top = 0.025,
+#'     factor_40_bottom = 0.029,
+#'     factor_100_top = 0.016,
+#'     factor_100_bottom = 0.018
+#'   )
+#' )
+#' result <- build_sample_result(
+#'   viscometer_id = "001-00001",
+#'   sample_type = "unlisted",
+#'   analysis_temperature_c = 40,
+#'   time_1 = 232,
+#'   time_2 = 200
+#' )
+#'
+#' render_high_density_report(list(result))
+#'
+#' options(old_opt)
 render_high_density_report <- function(
   results,
   output_path = NULL,
@@ -143,6 +196,31 @@ render_high_density_report <- function(
 #' @param result A result object.
 #' @return The same result object with a locked flag.
 #' @export
+#' @examples
+#' old_opt <- options(kinvicalc.reference_db_path = tempfile(fileext = ".db"))
+#'
+#' add_viscometer(
+#'   build_viscometer_record(
+#'     viscometer_size = 1,
+#'     serial_number = "00001",
+#'     factor_40_top = 0.025,
+#'     factor_40_bottom = 0.029,
+#'     factor_100_top = 0.016,
+#'     factor_100_bottom = 0.018
+#'   )
+#' )
+#' result <- build_sample_result(
+#'   viscometer_id = "001-00001",
+#'   sample_type = "unlisted",
+#'   analysis_temperature_c = 40,
+#'   time_1 = 232,
+#'   time_2 = 200
+#' )
+#'
+#' locked <- lock_result(result)
+#' locked$locked
+#'
+#' options(old_opt)
 lock_result <- function(result) {
   if (is.null(result) || !inherits(result, "kinvicalc_result")) {
     cli::cli_abort(c(
@@ -163,6 +241,30 @@ lock_result <- function(result) {
 #' @param results A list of result objects.
 #' @return A tibble summarizing the results.
 #' @export
+#' @examples
+#' old_opt <- options(kinvicalc.reference_db_path = tempfile(fileext = ".db"))
+#'
+#' add_viscometer(
+#'   build_viscometer_record(
+#'     viscometer_size = 1,
+#'     serial_number = "00001",
+#'     factor_40_top = 0.025,
+#'     factor_40_bottom = 0.029,
+#'     factor_100_top = 0.016,
+#'     factor_100_bottom = 0.018
+#'   )
+#' )
+#' result <- build_sample_result(
+#'   viscometer_id = "001-00001",
+#'   sample_type = "unlisted",
+#'   analysis_temperature_c = 40,
+#'   time_1 = 232,
+#'   time_2 = 200
+#' )
+#'
+#' session_results_table(list(result))
+#'
+#' options(old_opt)
 session_results_table <- function(results) {
   if (is.null(results)) {
     return(tibble::tibble())

@@ -27,6 +27,18 @@ sample_rule_required_fields <- c(
 #' @param viscometer A data frame-like object representing one viscometer.
 #' @return The validated viscometer tibble.
 #' @export
+#' @examples
+#' validate_viscometer_record(
+#'   tibble::tibble(
+#'     viscometer_size = 75,
+#'     serial_number = "294",
+#'     status = "active",
+#'     factor_40_top = 0.00842,
+#'     factor_40_bottom = 0.00609,
+#'     factor_100_top = 0.00847,
+#'     factor_100_bottom = 0.00614
+#'   )
+#' )
 validate_viscometer_record <- function(viscometer) {
   if (is.null(viscometer) || !is.data.frame(viscometer)) {
     cli::cli_abort(c(
@@ -110,12 +122,95 @@ validate_viscometer_record <- function(viscometer) {
   tibble::as_tibble(viscometer)
 }
 
+#' Build a viscometer record tibble.
+#'
+#' Assembles a one-row viscometer record with the columns required by
+#' [add_viscometer()] and [validate_viscometer_record()], deriving
+#' `viscometer_id` from `viscometer_size` and `serial_number`. The assembled
+#' record is validated before it is returned, so an invalid size, serial
+#' number, or calibration factor fails here rather than at insert time.
+#'
+#' All four calibration factors are required: ASTM D446-24 specifies a separate
+#' constant per bulb, and [resolve_calibration_factor()] interpolates between
+#' the 40 C and 100 C values, so no factor has a meaningful default.
+#'
+#' @param viscometer_size Integer viscometer size between 1 and 999, used as the
+#'   three-digit ID prefix.
+#' @param serial_number Alphanumeric serial number, at most 5 characters,
+#'   zero-padded on the left in the assembled ID.
+#' @param factor_40_top,factor_40_bottom Calibration factors at 40 C for the top
+#'   and bottom bulbs, mm2/s per second.
+#' @param factor_100_top,factor_100_bottom Calibration factors at 100 C for the
+#'   top and bottom bulbs, mm2/s per second.
+#' @param status Registry status string; defaults to `"active"`.
+#' @param added_by Optional name of the person adding the record.
+#' @param notes Optional free-text notes.
+#' @return A validated one-row viscometer tibble including `viscometer_id`.
+#' @examples
+#' build_viscometer_record(
+#'   viscometer_size = 75,
+#'   serial_number = "294",
+#'   factor_40_top = 0.00842,
+#'   factor_40_bottom = 0.00609,
+#'   factor_100_top = 0.00847,
+#'   factor_100_bottom = 0.00614
+#' )
+#' @export
+build_viscometer_record <- function(
+  viscometer_size,
+  serial_number,
+  factor_40_top,
+  factor_40_bottom,
+  factor_100_top,
+  factor_100_bottom,
+  status = "active",
+  added_by = NULL,
+  notes = NULL
+) {
+  assert_string(status, "status", fn = "build_viscometer_record")
+
+  optional_string <- function(value, name) {
+    if (is.null(value) || (length(value) == 1 && is.na(value))) {
+      return(NA_character_)
+    }
+    assert_string(value, name, fn = "build_viscometer_record")
+    value
+  }
+
+  record <- tibble::tibble(
+    viscometer_size = viscometer_size,
+    serial_number = as.character(serial_number),
+    status = status,
+    factor_40_top = factor_40_top,
+    factor_40_bottom = factor_40_bottom,
+    factor_100_top = factor_100_top,
+    factor_100_bottom = factor_100_bottom,
+    added_by = optional_string(added_by, "added_by"),
+    notes = optional_string(notes, "notes")
+  )
+
+  # Fills in viscometer_id and rejects bad sizes, serials, and factors.
+  validate_viscometer_record(record)
+}
+
 #' Validate a sample-type precision rule.
 #'
 #' @param rule A data frame-like record containing precision settings (see
 #'   `precision_metrics` for supported `metric` values).
 #' @return The validated rule tibble.
 #' @export
+#' @examples
+#' validate_sample_type_rule(
+#'   tibble::tibble(
+#'     sample_type = "base_oil",
+#'     metric = "determinability",
+#'     temp_min_c = 40,
+#'     temp_max_c = 40,
+#'     coefficient_a = 0.0037,
+#'     exponent_b = 1,
+#'     offset = 0
+#'   )
+#' )
 validate_sample_type_rule <- function(rule) {
   if (is.null(rule) || !is.data.frame(rule)) {
     cli::cli_abort(c(
@@ -209,6 +304,32 @@ validate_sample_type_rule <- function(rule) {
 #'   so the caller/UI can prompt for a repeat measurement per ASTM D445-26
 #'   11.2.3/12.4.1 -- `kinvicalc` does not silently average a failing pair.
 #' @export
+#' @examples
+#' # Use a temporary registry so the example does not touch the real
+#' # user-level reference.db.
+#' old_opt <- options(kinvicalc.reference_db_path = tempfile(fileext = ".db"))
+#'
+#' add_viscometer(
+#'   build_viscometer_record(
+#'     viscometer_size = 1,
+#'     serial_number = "00001",
+#'     factor_40_top = 0.025,
+#'     factor_40_bottom = 0.029,
+#'     factor_100_top = 0.016,
+#'     factor_100_bottom = 0.018
+#'   )
+#' )
+#'
+#' result <- build_sample_result(
+#'   viscometer_id = "001-00001",
+#'   sample_type = "unlisted",
+#'   analysis_temperature_c = 40,
+#'   time_1 = 232,
+#'   time_2 = 200
+#' )
+#' result$kinematic_viscosity_cSt
+#'
+#' options(old_opt)
 build_sample_result <- function(
   viscometer_id,
   sample_type,

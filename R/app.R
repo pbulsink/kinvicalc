@@ -1,4 +1,4 @@
-#' Run the kinvicalc Shiny application.
+#' Format a sample type code as a human-readable label.
 #'
 #' @param sample_type A sample type code.
 #' @export
@@ -6,6 +6,29 @@ format_sample_type_label_app <- function(sample_type) {
   tools::toTitleCase(gsub("_", " ", sample_type, fixed = TRUE))
 }
 
+#' Format a sample type code as a human-readable label.
+#'
+#' @param sample_type A sample type code.
+#' @return A character scalar title-case label, e.g. `"base_oil"` becomes
+#'   `"Base Oil"`.
+#' @export
+#' @examples
+#' format_sample_type_label_app("base_oil")
+format_sample_type_label_app <- function(sample_type) {
+  tools::toTitleCase(gsub("_", " ", sample_type, fixed = TRUE))
+}
+
+#' Build the sample-type dropdown choices for the Shiny app.
+#'
+#' Unlike `kinvicalc:::sample_type_choices()` (which reads distinct sample
+#' types from the local reference database), this returns a fixed,
+#' curated ordering of the sample types the app exposes in its UI, with
+#' `"standard"` (the Characterization Laboratory QA/QC reference substance)
+#' listed alongside the ASTM D445-26 material categories.
+#'
+#' @return A named character vector: values are sample-type keys, names are
+#'   display labels, suitable for `shiny::selectInput(choices = ...)`.
+#' @keywords internal
 sample_type_choices_app <- function() {
   stats::setNames(
     c(
@@ -37,6 +60,15 @@ sample_type_choices_app <- function() {
   )
 }
 
+#' Build the viscometer dropdown choices for the Shiny app.
+#'
+#' @param include_archived If `FALSE` (default), archived viscometers are
+#'   excluded from the returned choices.
+#' @return A named character vector: values are viscometer IDs, names are
+#'   `"<id> (size <size>)"` labels (with an `" [archived]"` suffix when
+#'   applicable), suitable for `shiny::selectInput(choices = ...)`. An empty
+#'   named vector if the registry (post-filtering) is empty.
+#' @keywords internal
 viscometer_choices_app <- function(include_archived = FALSE) {
   viscometers <- kinvicalc::list_viscometers()
   if (nrow(viscometers) == 0) {
@@ -65,13 +97,40 @@ viscometer_choices_app <- function(include_archived = FALSE) {
   stats::setNames(viscometers$viscometer_id, labels)
 }
 
+#' Null-coalescing infix operator.
+#'
+#' @param x A value to test.
+#' @param y Fallback value returned when `x` is `NULL`.
+#' @return `y` if `x` is `NULL`, otherwise `x`.
+#' @name null-coalesce
+#' @keywords internal
+#' @examples
+#' kinvicalc:::`%||%`(NULL, "default")
+#' kinvicalc:::`%||%`("value", "default")
 `%||%` <- function(x, y) if (is.null(x)) y else x
 
-# Repeatability/reproducibility against a known Standard Reference Substance
-# value (e.g. Characterization Laboratory QA/QC standards) are centred on the
-# expected value itself, not on the average of the measured result and the
-# expected value -- unlike evaluate_repeatability()/evaluate_reproducibility(),
-# which compare two independent measured results and so use their average.
+#' Evaluate a measured result against a known standard/expected value.
+#'
+#' Repeatability/reproducibility checks against a known Characterization
+#' Laboratory QA/QC Standard Reference Substance value are centred on the
+#' expected value itself, not on the average of the measured result and the
+#' expected value -- unlike `evaluate_repeatability()`/
+#' `evaluate_reproducibility()`, which compare two independent measured
+#' results and so use their average.
+#'
+#' @param sample_type Sample type label passed to `get_sample_type_rule()`
+#'   (typically `"standard"`).
+#' @param analysis_temperature_c Analysis temperature in C.
+#' @param measured_value The measured kinematic viscosity, mm^2/s.
+#' @param expected_value The known/expected kinematic viscosity for the
+#'   reference substance, mm^2/s. The precision limit is centred on this
+#'   value.
+#' @param metric Either `"repeatability"` or `"reproducibility"`, passed to
+#'   `get_sample_type_rule()`.
+#' @return A list with `difference` (absolute difference between measured and
+#'   expected values), `limit` (the permitted precision limit), `result`
+#'   (`"pass"` or `"fail"`), and `passed` (logical).
+#' @keywords internal
 evaluate_standard_check <- function(
   sample_type,
   analysis_temperature_c,
@@ -85,7 +144,7 @@ evaluate_standard_check <- function(
     metric = metric
   )
   diff <- abs(measured_value - expected_value)
-  limit <- calculate_precision_limit(rule, expected_value)
+  limit <- kinvicalc:::calculate_precision_limit(rule, expected_value)
   passed <- diff <= limit
 
   list(
@@ -96,10 +155,19 @@ evaluate_standard_check <- function(
   )
 }
 
-# Builds the HTML content of the "QA/QC" cell in the locked-results reporting
-# table. Standard reference samples show determinability, repeatability
-# (r), and reproducibility (R) pass/fail, each coloured independently;
-# other sample types show determinability only, matching prior behaviour.
+#' Render the "QA/QC" cell of the locked-results reporting table.
+#'
+#' Standard reference samples (`sample_type == "standard"`) show
+#' determinability, repeatability (r), and reproducibility (R) pass/fail,
+#' each coloured independently (green for pass, red for fail); other sample
+#' types show determinability only.
+#'
+#' @param x A single `kinvicalc_result` (or an equivalent list) with
+#'   `determinability_result`, `sample_type`, and, for standard samples, a
+#'   `standard_check` list produced by `evaluate_standard_check()`.
+#' @return A character scalar of HTML (`<span>`/`<br/>`) for use in a
+#'   `shiny::renderTable()`-rendered results table.
+#' @keywords internal
 qa_qc_cell <- function(x) {
   pass_fail_span <- function(label, passed) {
     colour <- if (passed) "#1a7f37" else "#c0392b"
@@ -126,6 +194,17 @@ qa_qc_cell <- function(x) {
   paste(lines, collapse = "<br/>")
 }
 
+#' Shiny server logic for the `kinvicalc` app.
+#'
+#' Wires together the two-flow-time measurement form, calculation and result
+#' locking, the standard-sample QA/QC check, and the viscometer registry
+#' add/update form. Not called directly; used by `run_app()` to construct the
+#' `shiny::shinyApp()` object.
+#'
+#' @param input,output,session Standard Shiny server arguments.
+#' @return Nothing meaningful; called for its side effect of registering
+#'   reactive outputs and observers.
+#' @keywords internal
 app_server <- function(input, output, session) {
   result <- shiny::reactiveVal(NULL)
   standard_check <- shiny::reactiveVal(NULL)
@@ -343,7 +422,7 @@ app_server <- function(input, output, session) {
     shiny::req(input$new_factor_100_bottom)
 
     viscometer_id <- tryCatch(
-      format_viscometer_id(
+      kinvicalc::format_viscometer_id(
         viscometer_size = input$new_viscometer_size,
         serial_number = trimws(input$new_serial_number),
         fn = "app_server"
@@ -428,7 +507,7 @@ app_server <- function(input, output, session) {
     shiny::removeModal()
 
     viscometer_id <- tryCatch(
-      format_viscometer_id(
+      kinvicalc::format_viscometer_id(
         viscometer_size = input$new_viscometer_size,
         serial_number = trimws(input$new_serial_number),
         fn = "app_server"
@@ -758,7 +837,7 @@ app_server <- function(input, output, session) {
 
   output$new_viscometer_id_preview <- shiny::renderUI({
     preview <- tryCatch(
-      format_viscometer_id(
+      kinvicalc::format_viscometer_id(
         viscometer_size = input$new_viscometer_size,
         serial_number = trimws(input$new_serial_number %||% ""),
         fn = "app_server"
@@ -781,7 +860,7 @@ app_server <- function(input, output, session) {
 
   new_viscometer_id_reactive <- shiny::reactive({
     tryCatch(
-      format_viscometer_id(
+      kinvicalc::format_viscometer_id(
         viscometer_size = input$new_viscometer_size,
         serial_number = trimws(input$new_serial_number %||% ""),
         fn = "app_server"
@@ -951,9 +1030,31 @@ app_server <- function(input, output, session) {
   })
 }
 
+#' Run the kinvicalc Shiny application.
+#'
+#' @return A [shiny::shinyApp()] object.
+#' @examples
+#' if (interactive()) {
+#'   run_app()
+#' }
+#' @export
 run_app <- function() {
   # nocov start
+  # Serve inst/shiny/www/ under "/" regardless of launch entry point
+  # (run_app() directly, or inst/shiny/app.R via shiny::runApp()).
+  shiny::addResourcePath(
+    "www",
+    system.file("shiny", "www", package = "kinvicalc")
+  )
+
   ui <- bslib::page_fluid(
+    shiny::tags$head(
+      shiny::tags$link(
+        rel = "icon",
+        type = "image/x-icon",
+        href = "www/favicon.ico"
+      )
+    ),
     bslib::navset_card_tab(
       bslib::nav_panel(
         "Calculation",
@@ -992,16 +1093,19 @@ run_app <- function() {
                 max = 150,
                 step = 1
               ),
+              # time_1 is resolved against the top bulb factor and time_2
+              # against the bottom bulb in build_sample_result(); keep the
+              # labels in that order.
               shiny::numericInput(
                 "time_1",
-                "First flow time (s)",
+                "Top flow time (s)",
                 value = NA,
                 min = 0,
                 step = 0.1
               ),
               shiny::numericInput(
                 "time_2",
-                "Second flow time (s)",
+                "Bottom flow time (s)",
                 value = NA,
                 min = 0,
                 step = 0.1
@@ -1067,6 +1171,13 @@ run_app <- function() {
           bslib::layout_columns(
             col_widths = c(6, 6),
             shiny::div(
+              shiny::tags$script(shiny::HTML(
+                "
+                $(document).on('keyup input', '#new_viscometer_size, #new_serial_number', function() {
+                  $(this).trigger('change');
+                });
+                "
+              )),
               shiny::numericInput(
                 "new_viscometer_size",
                 "Viscometer size",
@@ -1142,5 +1253,3 @@ run_app <- function() {
   shiny::shinyApp(ui, app_server)
   # nocov end
 }
-
-app <- run_app()

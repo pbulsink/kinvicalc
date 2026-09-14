@@ -26,6 +26,9 @@ MIN_FLOW_TIME_S <- 200
 #'   mm2/s) and whether the flow time is below the minimum
 #'   (`low_flow_time_flag`).
 #' @export
+#' @examples
+#' calculate_kinematic_viscosity(time_s = 232, factor = 0.025)
+#' calculate_kinematic_viscosity(time_s = 150, factor = 0.025)
 calculate_kinematic_viscosity <- function(
   time_s,
   factor,
@@ -154,6 +157,14 @@ reference_db_connection <- function() {
 #' @param sample_types A tibble of sample-type rules.
 #' @return Invisibly TRUE when saved.
 #' @export
+#' @examples
+#' # Use a temporary registry so the example does not touch the real
+#' # user-level reference.db.
+#' old_opt <- options(kinvicalc.reference_db_path = tempfile(fileext = ".db"))
+#'
+#' save_reference_data(sample_types = kinvicalc:::.default_sample_rules())
+#'
+#' options(old_opt)
 save_reference_data <- function(viscometers = NULL, sample_types = NULL) {
   db <- reference_db_connection()
   on.exit(DBI::dbDisconnect(db), add = TRUE)
@@ -245,6 +256,14 @@ save_reference_data <- function(viscometers = NULL, sample_types = NULL) {
 #'
 #' @return A list containing viscometers and sample_types.
 #' @export
+#' @examples
+#' # Use a temporary registry so the example does not touch the real
+#' # user-level reference.db.
+#' old_opt <- options(kinvicalc.reference_db_path = tempfile(fileext = ".db"))
+#'
+#' load_reference_data()$sample_types
+#'
+#' options(old_opt)
 load_reference_data <- function() {
   db <- reference_db_connection()
   on.exit(DBI::dbDisconnect(db), add = TRUE)

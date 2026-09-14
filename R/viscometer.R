@@ -5,6 +5,9 @@
 #' @param viscometer_id Viscometer ID string.
 #' @return TRUE if valid, otherwise FALSE.
 #' @export
+#' @examples
+#' validate_viscometer("200-12345")
+#' validate_viscometer("not-an-id")
 validate_viscometer <- function(viscometer_id) {
   assert_string(viscometer_id, "viscometer_id", fn = "validate_viscometer")
   is_valid_viscometer_id(viscometer_id)
@@ -17,6 +20,21 @@ validate_viscometer <- function(viscometer_id) {
 #' @param bulb Which bulb to resolve: top or bottom.
 #' @return Calibration factor for the requested bulb and temperature.
 #' @export
+#' @examples
+#' viscometer <- build_viscometer_record(
+#'   viscometer_size = 1,
+#'   serial_number = "00001",
+#'   factor_40_top = 0.025,
+#'   factor_40_bottom = 0.029,
+#'   factor_100_top = 0.016,
+#'   factor_100_bottom = 0.018
+#' )
+#'
+#' # At a tabulated temperature
+#' resolve_calibration_factor(viscometer, 40, bulb = "top")
+#'
+#' # Interpolated between 40 C and 100 C
+#' resolve_calibration_factor(viscometer, 70, bulb = "top")
 resolve_calibration_factor <- function(
   viscometer,
   temperature_c,
@@ -97,6 +115,12 @@ resolve_calibration_factor <- function(
 #'
 #' @return A tibble of viscometer records.
 #' @export
+#' @examples
+#' old_opt <- options(kinvicalc.reference_db_path = tempfile(fileext = ".db"))
+#'
+#' list_viscometers()
+#'
+#' options(old_opt)
 list_viscometers <- function() {
   db <- reference_db_connection()
   on.exit(DBI::dbDisconnect(db), add = TRUE)
@@ -108,6 +132,12 @@ list_viscometers <- function() {
 #'
 #' @return A tibble of non-archived viscometer records.
 #' @export
+#' @examples
+#' old_opt <- options(kinvicalc.reference_db_path = tempfile(fileext = ".db"))
+#'
+#' list_active_viscometers()
+#'
+#' options(old_opt)
 list_active_viscometers <- function() {
   viscometers <- list_viscometers()
   if (!"archived_at" %in% names(viscometers)) {
@@ -120,6 +150,12 @@ list_active_viscometers <- function() {
 #'
 #' @return A tibble of archived viscometer records.
 #' @export
+#' @examples
+#' old_opt <- options(kinvicalc.reference_db_path = tempfile(fileext = ".db"))
+#'
+#' list_archived_viscometers()
+#'
+#' options(old_opt)
 list_archived_viscometers <- function() {
   viscometers <- list_viscometers()
   if (!"archived_at" %in% names(viscometers)) {
@@ -133,6 +169,22 @@ list_archived_viscometers <- function() {
 #' @param viscometer_id A viscometer identifier.
 #' @return A one-row tibble for the requested viscometer.
 #' @export
+#' @examples
+#' old_opt <- options(kinvicalc.reference_db_path = tempfile(fileext = ".db"))
+#'
+#' add_viscometer(
+#'   build_viscometer_record(
+#'     viscometer_size = 1,
+#'     serial_number = "00001",
+#'     factor_40_top = 0.025,
+#'     factor_40_bottom = 0.029,
+#'     factor_100_top = 0.016,
+#'     factor_100_bottom = 0.018
+#'   )
+#' )
+#' get_viscometer("001-00001")
+#'
+#' options(old_opt)
 get_viscometer <- function(viscometer_id) {
   assert_string(viscometer_id, "viscometer_id", fn = "get_viscometer")
   if (!validate_viscometer(viscometer_id)) {
@@ -169,6 +221,21 @@ get_viscometer <- function(viscometer_id) {
 #' @param viscometer A viscometer record tibble.
 #' @return The inserted viscometer record.
 #' @export
+#' @examples
+#' old_opt <- options(kinvicalc.reference_db_path = tempfile(fileext = ".db"))
+#'
+#' add_viscometer(
+#'   build_viscometer_record(
+#'     viscometer_size = 1,
+#'     serial_number = "00001",
+#'     factor_40_top = 0.025,
+#'     factor_40_bottom = 0.029,
+#'     factor_100_top = 0.016,
+#'     factor_100_bottom = 0.018
+#'   )
+#' )
+#'
+#' options(old_opt)
 add_viscometer <- function(viscometer) {
   viscometer <- validate_viscometer_record(viscometer)
   if (!"archived_at" %in% names(viscometer)) {
@@ -243,7 +310,19 @@ add_viscometer <- function(viscometer) {
 #' @return The updated viscometer record.
 #' @export
 #' @examples
-#' \dontrun{
+#' old_opt <- options(kinvicalc.reference_db_path = tempfile(fileext = ".db"))
+#'
+#' add_viscometer(
+#'   build_viscometer_record(
+#'     viscometer_size = 7,
+#'     serial_number = "00007",
+#'     factor_40_top = 0.025,
+#'     factor_40_bottom = 0.029,
+#'     factor_100_top = 0.016,
+#'     factor_100_bottom = 0.018
+#'   )
+#' )
+#'
 #' update_viscometer_factors(
 #'   "007-00007",
 #'   factor_40_top = 0.0251,
@@ -252,7 +331,8 @@ add_viscometer <- function(viscometer) {
 #'   factor_100_bottom = 0.0251,
 #'   updated_by = "jsmith"
 #' )
-#' }
+#'
+#' options(old_opt)
 update_viscometer_factors <- function(
   viscometer_id,
   factor_40_top,
@@ -340,6 +420,22 @@ update_viscometer_factors <- function(
 #' @param viscometer_id A viscometer identifier.
 #' @return The updated viscometer record.
 #' @export
+#' @examples
+#' old_opt <- options(kinvicalc.reference_db_path = tempfile(fileext = ".db"))
+#'
+#' add_viscometer(
+#'   build_viscometer_record(
+#'     viscometer_size = 1,
+#'     serial_number = "00001",
+#'     factor_40_top = 0.025,
+#'     factor_40_bottom = 0.029,
+#'     factor_100_top = 0.016,
+#'     factor_100_bottom = 0.018
+#'   )
+#' )
+#' archive_viscometer("001-00001")
+#'
+#' options(old_opt)
 archive_viscometer <- function(viscometer_id) {
   assert_string(viscometer_id, "viscometer_id", fn = "archive_viscometer")
 
@@ -367,6 +463,23 @@ archive_viscometer <- function(viscometer_id) {
 #' @param viscometer_id A viscometer identifier.
 #' @return The updated viscometer record.
 #' @export
+#' @examples
+#' old_opt <- options(kinvicalc.reference_db_path = tempfile(fileext = ".db"))
+#'
+#' add_viscometer(
+#'   build_viscometer_record(
+#'     viscometer_size = 1,
+#'     serial_number = "00001",
+#'     factor_40_top = 0.025,
+#'     factor_40_bottom = 0.029,
+#'     factor_100_top = 0.016,
+#'     factor_100_bottom = 0.018
+#'   )
+#' )
+#' archive_viscometer("001-00001")
+#' unarchive_viscometer("001-00001")
+#'
+#' options(old_opt)
 unarchive_viscometer <- function(viscometer_id) {
   assert_string(viscometer_id, "viscometer_id", fn = "unarchive_viscometer")
 
@@ -400,9 +513,21 @@ unarchive_viscometer <- function(viscometer_id) {
 #' @return Invisibly `TRUE` when the counter update succeeds.
 #' @export
 #' @examples
-#' \dontrun{
+#' old_opt <- options(kinvicalc.reference_db_path = tempfile(fileext = ".db"))
+#'
+#' add_viscometer(
+#'   build_viscometer_record(
+#'     viscometer_size = 7,
+#'     serial_number = "00007",
+#'     factor_40_top = 0.025,
+#'     factor_40_bottom = 0.029,
+#'     factor_100_top = 0.016,
+#'     factor_100_bottom = 0.018
+#'   )
+#' )
 #' increment_viscometer_use("007-00007")
-#' }
+#'
+#' options(old_opt)
 increment_viscometer_use <- function(viscometer_id) {
   assert_string(viscometer_id, "viscometer_id", fn = "increment_viscometer_use")
 
@@ -438,9 +563,22 @@ increment_viscometer_use <- function(viscometer_id) {
 #' @return A one-row tibble with the updated use counters for the viscometer.
 #' @export
 #' @examples
-#' \dontrun{
+#' old_opt <- options(kinvicalc.reference_db_path = tempfile(fileext = ".db"))
+#'
+#' add_viscometer(
+#'   build_viscometer_record(
+#'     viscometer_size = 7,
+#'     serial_number = "00007",
+#'     factor_40_top = 0.025,
+#'     factor_40_bottom = 0.029,
+#'     factor_100_top = 0.016,
+#'     factor_100_bottom = 0.018
+#'   )
+#' )
+#' increment_viscometer_use("007-00007")
 #' reset_viscometer_use_count("007-00007")
-#' }
+#'
+#' options(old_opt)
 reset_viscometer_use_count <- function(viscometer_id) {
   assert_string(
     viscometer_id,
@@ -482,9 +620,21 @@ reset_viscometer_use_count <- function(viscometer_id) {
 #'   `total_use_count`, and `last_deep_cleaned_at`.
 #' @export
 #' @examples
-#' \dontrun{
+#' old_opt <- options(kinvicalc.reference_db_path = tempfile(fileext = ".db"))
+#'
+#' add_viscometer(
+#'   build_viscometer_record(
+#'     viscometer_size = 7,
+#'     serial_number = "00007",
+#'     factor_40_top = 0.025,
+#'     factor_40_bottom = 0.029,
+#'     factor_100_top = 0.016,
+#'     factor_100_bottom = 0.018
+#'   )
+#' )
 #' get_viscometer_use_summary("007-00007")
-#' }
+#'
+#' options(old_opt)
 get_viscometer_use_summary <- function(viscometer_id) {
   assert_string(
     viscometer_id,
@@ -521,6 +671,22 @@ get_viscometer_use_summary <- function(viscometer_id) {
 #' @param viscometer_id A viscometer identifier.
 #' @return Invisibly TRUE when removed.
 #' @export
+#' @examples
+#' old_opt <- options(kinvicalc.reference_db_path = tempfile(fileext = ".db"))
+#'
+#' add_viscometer(
+#'   build_viscometer_record(
+#'     viscometer_size = 1,
+#'     serial_number = "00001",
+#'     factor_40_top = 0.025,
+#'     factor_40_bottom = 0.029,
+#'     factor_100_top = 0.016,
+#'     factor_100_bottom = 0.018
+#'   )
+#' )
+#' remove_viscometer("001-00001")
+#'
+#' options(old_opt)
 remove_viscometer <- function(viscometer_id) {
   assert_string(viscometer_id, "viscometer_id", fn = "remove_viscometer")
   db <- reference_db_connection()

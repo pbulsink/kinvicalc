@@ -1,5 +1,16 @@
 # Internal utilities and package-local defaults.
 
+#' Resolve the path to the local SQLite reference database.
+#'
+#' Returns the user-level path used to store the viscometer registry and
+#' sample-type precision rules. The path can be overridden (for example, to
+#' point at a temporary database in examples, tests, or a rendered README/
+#' vignette) by setting `options(kinvicalc.reference_db_path = <path>)`.
+#'
+#' @return A character scalar file path. Does not guarantee the file exists;
+#'   `reference_db_connection()` creates it (and its parent directory) lazily
+#'   on first connection.
+#' @keywords internal
 .default_reference_db <- function() {
   override <- getOption("kinvicalc.reference_db_path")
   if (!is.null(override)) {
@@ -22,10 +33,23 @@
 #' @param digits Number of decimal places to round to. Defaults to 4.
 #' @return `x` rounded to `digits` decimal places using round-half-to-even.
 #' @keywords internal
+#' @examples
+#' kinvicalc:::round_half_even(2.5, 0)
+#' kinvicalc:::round_half_even(3.14159, 2)
 round_half_even <- function(x, digits = 4) {
   round(x, digits)
 }
 
+#' Assert that a value is a single non-missing numeric.
+#'
+#' @param x Value to check.
+#' @param name Character scalar naming `x` in the error message (the argument
+#'   name as the caller knows it).
+#' @param fn Character scalar naming the calling function, used in error
+#'   messages. Defaults to the name of the calling function.
+#' @return `TRUE`, invisibly, if `x` passes; otherwise aborts via
+#'   `cli::cli_abort()`.
+#' @keywords internal
 assert_scalar_numeric <- function(x, name, fn = NULL) {
   if (is.null(fn)) {
     fn <- as.character(sys.call(-1)[[1]])
@@ -37,8 +61,21 @@ assert_scalar_numeric <- function(x, name, fn = NULL) {
       "i" = "Supply one non-missing numeric value for {.arg {name}}."
     ))
   }
+
+  invisible(TRUE)
 }
 
+#' Assert that a value is a single non-empty string.
+#'
+#' @param x Value to check.
+#' @param name Character scalar naming `x` in the error message.
+#' @param allow_na If `TRUE`, a single `NA` value passes the check instead of
+#'   raising an error. Defaults to `FALSE`.
+#' @param fn Character scalar naming the calling function, used in error
+#'   messages. Defaults to the name of the calling function.
+#' @return `TRUE`, invisibly, if `x` passes; otherwise aborts via
+#'   `cli::cli_abort()`.
+#' @keywords internal
 assert_string <- function(x, name, allow_na = FALSE, fn = NULL) {
   if (is.null(fn)) {
     fn <- as.character(sys.call(-1)[[1]])
@@ -54,8 +91,19 @@ assert_string <- function(x, name, allow_na = FALSE, fn = NULL) {
       "i" = "Provide a character scalar for {.arg {name}} with at least one non-space character."
     ))
   }
+
+  invisible(TRUE)
 }
 
+#' Assert that a value is a single non-missing Date.
+#'
+#' @param x Value to check.
+#' @param name Character scalar naming `x` in the error message.
+#' @param fn Character scalar naming the calling function, used in error
+#'   messages. Defaults to the name of the calling function.
+#' @return `TRUE`, invisibly, if `x` passes; otherwise aborts via
+#'   `cli::cli_abort()`.
+#' @keywords internal
 assert_date <- function(x, name, fn = NULL) {
   if (is.null(fn)) {
     fn <- as.character(sys.call(-1)[[1]])
@@ -67,8 +115,23 @@ assert_date <- function(x, name, fn = NULL) {
       "i" = "Convert {.arg {name}} to Date (for example with {.fn as.Date}) before calling {.fn {fn}}."
     ))
   }
+
+  invisible(TRUE)
 }
 
+#' Format a sample-type key as a human-readable label.
+#'
+#' Converts an internal snake_case sample-type key (as stored in the
+#' `sample_types` registry table, e.g. `"base_oil"`) into a title-case label
+#' suitable for display (e.g. `"Base Oil"`).
+#'
+#' @param sample_type Character scalar sample-type key, or `NA`.
+#' @return A character scalar label, or `NA_character_` if `sample_type` is
+#'   `NA`.
+#' @keywords internal
+#' @examples
+#' kinvicalc:::format_sample_type_label("base_oil")
+#' kinvicalc:::format_sample_type_label("kerosine_diesel_biodiesel")
 format_sample_type_label <- function(sample_type) {
   if (is.na(sample_type)) {
     return(NA_character_)
@@ -77,6 +140,16 @@ format_sample_type_label <- function(sample_type) {
   tools::toTitleCase(gsub("_", " ", sample_type, fixed = TRUE))
 }
 
+#' Build a named vector of sample-type choices for UI select inputs.
+#'
+#' Reads the distinct sample types currently defined in the local reference
+#' database and names each key with its human-readable label (via
+#' `format_sample_type_label()`), suitable for passing directly to
+#' `shiny::selectInput(choices = ...)`.
+#'
+#' @return A named character vector: values are sample-type keys, names are
+#'   display labels.
+#' @keywords internal
 sample_type_choices <- function() {
   rules <- load_reference_data()$sample_types
   sample_types <- sort(unique(rules$sample_type))
@@ -86,6 +159,14 @@ sample_type_choices <- function() {
   )
 }
 
+#' Format a single-row viscometer tibble as a display label.
+#'
+#' @param viscometer A single-row viscometer tibble (as returned by
+#'   `get_viscometer()` or a row of `list_viscometers()`), used for its
+#'   `viscometer_id`, `viscometer_size`, and `archived_at` fields.
+#' @return A character scalar label, e.g. `"001-00001 (size 1)"`, with an
+#'   `" [archived]"` suffix when the viscometer is archived.
+#' @keywords internal
 format_viscometer_label <- function(viscometer) {
   archived <- if (
     isTRUE(
@@ -105,6 +186,18 @@ format_viscometer_label <- function(viscometer) {
   )
 }
 
+#' Build a named vector of viscometer choices for UI select inputs.
+#'
+#' Reads viscometers from the local registry and names each ID with its
+#' display label (via `format_viscometer_label()`), suitable for passing
+#' directly to `shiny::selectInput(choices = ...)`.
+#'
+#' @param include_archived If `FALSE` (default), archived viscometers are
+#'   excluded.
+#' @return A named character vector: values are viscometer IDs, names are
+#'   display labels. An empty named vector if the registry (post-filtering)
+#'   is empty.
+#' @keywords internal
 viscometer_choices <- function(include_archived = FALSE) {
   viscometers <- list_viscometers()
   if (!include_archived && "archived_at" %in% names(viscometers)) {
@@ -172,6 +265,16 @@ format_viscometer_id <- function(viscometer_size, serial_number, fn = NULL) {
   sprintf("%03d-%s", as.integer(viscometer_size), serial_number)
 }
 
+#' Check whether a string matches the canonical viscometer ID pattern.
+#'
+#' @param x Character vector to test.
+#' @return A logical vector the same length as `x`, `TRUE` where the value
+#'   matches `NNN-XXXXX` (three digits, hyphen, five alphanumeric
+#'   characters).
+#' @keywords internal
+#' @examples
+#' kinvicalc:::is_valid_viscometer_id("200-12345")
+#' kinvicalc:::is_valid_viscometer_id("not-an-id")
 is_valid_viscometer_id <- function(x) {
   grepl("^[0-9]{3}-[A-Za-z0-9]{5}$", x)
 }
@@ -185,6 +288,9 @@ is_valid_viscometer_id <- function(x) {
 #'   explicitly to 4 when producing a final client report.
 #' @return A character string with `x` rounded to `digits` significant figures.
 #' @export
+#' @examples
+#' format_significant(5.545, 5)
+#' format_significant(5.545, 4)
 format_significant <- function(x, digits = 5) {
   if (is.na(x)) {
     return(NA_character_)
@@ -194,32 +300,45 @@ format_significant <- function(x, digits = 5) {
   formatC(signif(x, digits), digits = digits, format = "g", flag = "#")
 }
 
-# Default sample-type precision rules, transcribed from ASTM D445-26 Section
-# 17 (Precision and Bias):
-#   - determinability (d): 17.1.1 (table) and 17.1.2 (used in-service oils);
-#     11.2.4/12.4.1 fallback estimates for materials/temperatures not listed.
-#   - repeatability (r): 17.2.1.
-#   - reproducibility (R): 17.2.2.
-#
-# Each rule expresses its limit as a function of the average of the two
-# compared values, y or x (mm2/s):
-#
-#   limit = coefficient_a * (average + offset) ^ exponent_b
-#
-# covering every functional form used in the standard:
-#   "0.0037y"        -> coefficient_a = 0.0037, exponent_b = 1,   offset = 0
-#   "0.0013(y+1)"     -> coefficient_a = 0.0013, exponent_b = 1,   offset = 1
-#   "0.00106y^1.1"    -> coefficient_a = 0.00106, exponent_b = 1.1, offset = 0
-#   a fixed mm2/s value -> coefficient_a = value, exponent_b = 0,  offset = 0
-#
-# Some cells in the standard's repeatability/reproducibility tables for jet
-# fuels at -40 C, kerosine/diesel/biodiesel fuels and blends at 40 C, and used
-# in-service formulated oils could not be unambiguously transcribed from the
-# scanned/OCR'd table layout (columns for several sample types run together).
-# Those rows are intentionally left with `coefficient_a = NA` so that
-# `get_sample_type_rule()` errors loudly rather than silently using a guessed
-# value; confirm the correct figures directly against a clean copy of D445-26
-# Table entries in 17.2.1/17.2.2 and update via `add_sample_type_rule()`.
+#' Default sample-type precision rules, transcribed from ASTM D445-26.
+#'
+#' Builds the seed data for the `sample_types` registry table (D445-26
+#' Section 17, Precision and Bias):
+#' \itemize{
+#'   \item determinability (d): 17.1.1 (table) and 17.1.2 (used in-service
+#'     oils); 11.2.4/12.4.1 fallback estimates for materials/temperatures not
+#'     listed.
+#'   \item repeatability (r): 17.2.1.
+#'   \item reproducibility (R): 17.2.2.
+#' }
+#'
+#' Each rule expresses its limit as a function of the average of the two
+#' compared values, y or x (mm2/s):
+#'
+#' `limit = coefficient_a * (average + offset) ^ exponent_b`
+#'
+#' covering every functional form used in the standard:
+#' \itemize{
+#'   \item `"0.0037y"` -> `coefficient_a = 0.0037`, `exponent_b = 1`, `offset = 0`
+#'   \item `"0.0013(y+1)"` -> `coefficient_a = 0.0013`, `exponent_b = 1`, `offset = 1`
+#'   \item `"0.00106y^1.1"` -> `coefficient_a = 0.00106`, `exponent_b = 1.1`, `offset = 0`
+#'   \item a fixed mm2/s value -> `coefficient_a = value`, `exponent_b = 0`, `offset = 0`
+#' }
+#'
+#' Some cells in the standard's repeatability/reproducibility tables for jet
+#' fuels at -40 C, kerosine/diesel/biodiesel fuels and blends at 40 C, and
+#' used in-service formulated oils could not be unambiguously transcribed
+#' from the scanned/OCR'd table layout (columns for several sample types run
+#' together). Those rows are intentionally left with `coefficient_a = NA` so
+#' that `get_sample_type_rule()` errors loudly rather than silently using a
+#' guessed value; confirm the correct figures directly against a clean copy
+#' of D445-26 Table entries in 17.2.1/17.2.2 and update via
+#' `add_sample_type_rule()`.
+#'
+#' @return A tibble of seed precision rules with columns `sample_type`,
+#'   `temp_min_c`, `temp_max_c`, `coefficient_a`, `exponent_b`, `offset`,
+#'   `notes`, and `metric`.
+#' @keywords internal
 .default_sample_rules <- function() {
   determinability <- tibble::tribble(
     ~sample_type                    , ~temp_min_c , ~temp_max_c , ~coefficient_a , ~exponent_b , ~offset , ~notes                                                                              ,
@@ -293,6 +412,16 @@ format_significant <- function(x, digits = 5) {
 }
 
 
+#' Assert that a data frame has all expected columns.
+#'
+#' @param tbl A data frame or tibble to validate.
+#' @param expected_cols Character vector of column names that must be present
+#'   in `tbl`.
+#' @param fn Character scalar naming the calling function, used in error
+#'   messages. Defaults to the name of the calling function.
+#' @return `tbl`, invisibly, if all expected columns are present; otherwise
+#'   aborts via `cli::cli_abort()`.
+#' @keywords internal
 validate_reference_tbl <- function(tbl, expected_cols, fn = NULL) {
   if (is.null(fn)) {
     fn <- as.character(sys.call(-1)[[1]])
