@@ -917,14 +917,37 @@ app_server <- function(input, output, session) {
         ))
       }
 
+      is_archived <- if ("archived_at" %in% names(viscometers)) {
+        !is.na(viscometers$archived_at)
+      } else {
+        rep(FALSE, nrow(viscometers))
+      }
+
+      # Active viscometers first (by ID, from list_viscometers()'s ORDER BY),
+      # archived viscometers last, each group re-sorted by viscometer_id.
+      sort_order <- order(is_archived, viscometers$viscometer_id)
+      viscometers <- viscometers[sort_order, ]
+      is_archived <- is_archived[sort_order]
+
       format_dt <- function(x) {
         x <- as.character(x)
         x[is.na(x)] <- ""
         x
       }
 
+      display_id <- ifelse(
+        is_archived,
+        paste0("ARCHIVED-", viscometers$viscometer_id),
+        viscometers$viscometer_id
+      )
+      display_id <- ifelse(
+        is_archived,
+        sprintf("<span style='color: #8b0000;'>%s</span>", display_id),
+        display_id
+      )
+
       data.frame(
-        "Viscometer ID" = viscometers$viscometer_id,
+        "Viscometer ID" = display_id,
         "Entry Date" = format_dt(viscometers$created_at %||% NA_character_),
         "Last Clean Date" = format_dt(
           viscometers$last_deep_cleaned_at %||% NA_character_
@@ -968,7 +991,8 @@ app_server <- function(input, output, session) {
     striped = TRUE,
     bordered = TRUE,
     hover = TRUE,
-    spacing = "s"
+    spacing = "s",
+    sanitize.text.function = function(str) str
   )
 
   update_viscometer_inputs <- function() {
