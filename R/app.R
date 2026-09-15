@@ -1072,6 +1072,7 @@ run_app <- function() {
   )
 
   ui <- bslib::page_fluid(
+    title = "KinviCalc",
     shiny::tags$head(
       shiny::tags$link(
         rel = "icon",
@@ -1274,6 +1275,6 @@ run_app <- function() {
     )
   )
 
-  shiny::shinyApp(ui, app_server)
+  shiny::shinyApp(ui, app_server, options = list(launch.browser = TRUE))
   # nocov end
 }
