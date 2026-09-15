@@ -170,7 +170,7 @@ result
     ##     class(f) <- c(if (ordered) "ordered", "factor")
     ##     f
     ## }
-    ## <bytecode: 0x558a32ed2608>
+    ## <bytecode: 0x5567997477c0>
     ## <environment: namespace:base>
     ## 
     ## $low_flow_time_flag
@@ -204,7 +204,7 @@ result
     ## [1] NA
     ## 
     ## $created_at
-    ## [1] "2026-09-14 16:01:05 UTC"
+    ## [1] "2026-09-15 12:55:04 UTC"
     ## 
     ## attr(,"class")
     ## [1] "kinvicalc_result" "list"
