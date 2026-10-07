@@ -58,3 +58,6 @@ rsconnect/
 cobertura.xml
 coverage.xml
 docs
+
+# lintr config
+.lintr

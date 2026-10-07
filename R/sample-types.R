@@ -180,7 +180,7 @@ add_sample_type_rule <- function(rule) {
 #' @param rule A one-row precision rule tibble (see `get_sample_type_rule()`).
 #' @param average_value The average of the two values being compared, mm2/s.
 #' @return The numeric precision limit, mm2/s.
-#' @keywords internal
+#' @export
 #' @examples
 #' old_opt <- options(kinvicalc.reference_db_path = tempfile(fileext = ".db"))
 #'

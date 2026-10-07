@@ -1,14 +1,6 @@
 #' Format a sample type code as a human-readable label.
 #'
 #' @param sample_type A sample type code.
-#' @export
-format_sample_type_label_app <- function(sample_type) {
-  tools::toTitleCase(gsub("_", " ", sample_type, fixed = TRUE))
-}
-
-#' Format a sample type code as a human-readable label.
-#'
-#' @param sample_type A sample type code.
 #' @return A character scalar title-case label, e.g. `"base_oil"` becomes
 #'   `"Base Oil"`.
 #' @export
@@ -144,7 +136,7 @@ evaluate_standard_check <- function(
     metric = metric
   )
   diff <- abs(measured_value - expected_value)
-  limit <- kinvicalc:::calculate_precision_limit(rule, expected_value)
+  limit <- kinvicalc::calculate_precision_limit(rule, expected_value)
   passed <- diff <= limit
 
   list(
@@ -194,6 +186,72 @@ qa_qc_cell <- function(x) {
   paste(lines, collapse = "<br/>")
 }
 
+#' Resolve the directory used for CSV report exports.
+#'
+#' By default this is a `"reports"` folder on the user's desktop; the folder
+#' (and its parent) are created if needed. On Windows both the plain
+#' `%USERPROFILE%` desktop and the OneDrive-backed desktop are considered, so
+#' redirected-desktop setups still resolve to the real desktop location. The
+#' directory can be overridden by setting `options(kinvicalc.reports_dir =
+#' <dir>)`, which is used verbatim (and is how tests redirect exports).
+#'
+#' @return A character scalar directory path, created if it did not exist.
+#' @keywords internal
+reports_export_directory <- function() {
+  override <- getOption("kinvicalc.reports_dir")
+  if (!is.null(override) && nzchar(override)) {
+    dir.create(override, recursive = TRUE, showWarnings = FALSE)
+    return(override)
+  }
+
+  desktop_candidates <- c(file.path(Sys.getenv("USERPROFILE"), "Desktop"))
+  onedrive <- Sys.getenv("OneDrive")
+  if (nzchar(onedrive)) {
+    desktop_candidates <- c(desktop_candidates, file.path(onedrive, "Desktop"))
+  }
+  home_desktop <- file.path(path.expand("~"), "Desktop")
+  if (!home_desktop %in% desktop_candidates) {
+    desktop_candidates <- c(desktop_candidates, home_desktop)
+  }
+
+  existing <- desktop_candidates[file.exists(desktop_candidates)]
+  desktop <- if (length(existing) > 0) {
+    existing[1]
+  } else {
+    desktop_candidates[1]
+  }
+
+  reports_dir <- file.path(desktop, "reports")
+  dir.create(reports_dir, recursive = TRUE, showWarnings = FALSE)
+  reports_dir
+}
+
+#' Write a data frame to an Excel-friendly CSV file.
+#'
+#' The CSV is generated in memory and written as UTF-8; on Windows a BOM is
+#' prepended so spreadsheet software decodes the non-ASCII column headers
+#' (e.g. `"Visc 1 (mm\u00B2/s)"`) correctly.
+#'
+#' @param df A data frame to write.
+#' @param file_path Destination file path, including the filename.
+#' @return `file_path`, invisibly.
+#' @keywords internal
+write_report_csv <- function(df, file_path) {
+  csv_text <- paste(
+    utils::capture.output(utils::write.csv(df, row.names = FALSE)),
+    collapse = "\n"
+  )
+
+  con <- file(file_path, open = "wb")
+  on.exit(close(con), add = TRUE)
+  if (.Platform$OS.type == "windows") {
+    writeBin(as.raw(c(0xef, 0xbb, 0xbf)), con)
+  }
+  writeLines(enc2utf8(csv_text), con, sep = "\n", useBytes = TRUE)
+
+  invisible(file_path)
+}
+
 #' Shiny server logic for the `kinvicalc` app.
 #'
 #' Wires together the two-flow-time measurement form, calculation and result
@@ -212,6 +270,102 @@ app_server <- function(input, output, session) {
   maintenance_message <- shiny::reactiveVal("No maintenance action yet.")
   maintenance_refresh <- shiny::reactiveVal(0L)
   lock_message <- shiny::reactiveVal(NULL)
+  export_status <- shiny::reactiveVal(NULL)
+
+  # Build the exact data frame shown in the reporting table, so the on-screen
+  # rows and the CSV export can never drift apart. Returns a zero-row frame
+  # with the full column set when there are no locked results yet.
+  locked_results_data_frame <- function(locked) {
+    rows <- lapply(locked, function(x) {
+      data.frame(
+        "Sample Name" = if (!is.null(x$sample_id)) {
+          x$sample_id
+        } else {
+          NA_character_
+        },
+        "Sample Type" = format_sample_type_label_app(x$sample_type),
+        "Analysis Temp (\u00b0 C)" = if (
+          !is.null(x$analysis_temperature_c) &&
+            !is.na(x$analysis_temperature_c)
+        ) {
+          formatC(x$analysis_temperature_c, format = "f", digits = 1)
+        } else {
+          NA_character_
+        },
+        "Viscometer ID" = x$viscometer_id,
+        "t 1 (s)" = if (!is.null(x$time_1) && !is.na(x$time_1)) {
+          formatC(round(x$time_1, 1), format = "f", digits = 1)
+        } else {
+          NA_character_
+        },
+        "t 2 (s)" = if (!is.null(x$time_2) && !is.na(x$time_2)) {
+          formatC(round(x$time_2, 1), format = "f", digits = 1)
+        } else {
+          NA_character_
+        },
+        "Visc 1 (mm\u00B2/s)" = if (
+          !is.null(x$kinematic_viscosity_1_cSt) &&
+            !is.na(x$kinematic_viscosity_1_cSt)
+        ) {
+          kinvicalc::format_significant(
+            x$kinematic_viscosity_1_cSt,
+            digits = 5
+          )
+        } else {
+          NA_character_
+        },
+        "Visc 2 (mm\u00B2/s)" = if (
+          !is.null(x$kinematic_viscosity_2_cSt) &&
+            !is.na(x$kinematic_viscosity_2_cSt)
+        ) {
+          kinvicalc::format_significant(
+            x$kinematic_viscosity_2_cSt,
+            digits = 5
+          )
+        } else {
+          NA_character_
+        },
+        "Average Visc" = if (
+          !is.null(x$kinematic_viscosity_cSt) &&
+            !is.na(x$kinematic_viscosity_cSt)
+        ) {
+          kinvicalc::format_significant(x$kinematic_viscosity_cSt, digits = 5)
+        } else {
+          NA_character_
+        },
+        "QA/QC" = qa_qc_cell(x),
+        "Analysis Date/Time" = if (!is.null(x$created_at)) {
+          format(x$created_at, "%Y-%m-%d\n%H:%M:%S")
+        } else {
+          NA_character_
+        },
+        "Analyst" = if (!is.null(x$operator)) x$operator else NA_character_,
+        check.names = FALSE,
+        stringsAsFactors = FALSE
+      )
+    })
+
+    if (length(rows) == 0) {
+      return(data.frame(
+        "Sample Name" = character(0),
+        "Sample Type" = character(0),
+        "Analysis Temp (\u00b0 C)" = character(0),
+        "Viscometer ID" = character(0),
+        "t 1 (s)" = character(0),
+        "t 2 (s)" = character(0),
+        "Visc 1 (mm\u00B2/s)" = character(0),
+        "Visc 2 (mm\u00B2/s)" = character(0),
+        "Average Visc" = character(0),
+        "QA/QC" = character(0),
+        "Analysis Date/Time" = character(0),
+        "Analyst" = character(0),
+        check.names = FALSE,
+        stringsAsFactors = FALSE
+      ))
+    }
+
+    do.call(rbind, rows)
+  }
 
   bump_maintenance_refresh <- function() {
     maintenance_refresh(maintenance_refresh() + 1L)
@@ -739,101 +893,129 @@ app_server <- function(input, output, session) {
 
   output$locked_values_table <- shiny::renderTable(
     {
-      rows <- lapply(locked_results(), function(x) {
-        data.frame(
-          "Sample Name" = if (!is.null(x$sample_id)) {
-            x$sample_id
-          } else {
-            NA_character_
-          },
-          "Sample Type" = format_sample_type_label_app(x$sample_type),
-          "Analysis Temp (\u00b0 C)" = if (
-            !is.null(x$analysis_temperature_c) &&
-              !is.na(x$analysis_temperature_c)
-          ) {
-            formatC(x$analysis_temperature_c, format = "f", digits = 1)
-          } else {
-            NA_character_
-          },
-          "Viscometer ID" = x$viscometer_id,
-          "t 1 (s)" = if (!is.null(x$time_1) && !is.na(x$time_1)) {
-            formatC(round(x$time_1, 1), format = "f", digits = 1)
-          } else {
-            NA_character_
-          },
-          "t 2 (s)" = if (!is.null(x$time_2) && !is.na(x$time_2)) {
-            formatC(round(x$time_2, 1), format = "f", digits = 1)
-          } else {
-            NA_character_
-          },
-          "Visc 1 (mm\u00B2/s)" = if (
-            !is.null(x$kinematic_viscosity_1_cSt) &&
-              !is.na(x$kinematic_viscosity_1_cSt)
-          ) {
-            kinvicalc::format_significant(
-              x$kinematic_viscosity_1_cSt,
-              digits = 5
-            )
-          } else {
-            NA_character_
-          },
-          "Visc 2 (mm\u00B2/s)" = if (
-            !is.null(x$kinematic_viscosity_2_cSt) &&
-              !is.na(x$kinematic_viscosity_2_cSt)
-          ) {
-            kinvicalc::format_significant(
-              x$kinematic_viscosity_2_cSt,
-              digits = 5
-            )
-          } else {
-            NA_character_
-          },
-          "Average Visc" = if (
-            !is.null(x$kinematic_viscosity_cSt) &&
-              !is.na(x$kinematic_viscosity_cSt)
-          ) {
-            kinvicalc::format_significant(x$kinematic_viscosity_cSt, digits = 5)
-          } else {
-            NA_character_
-          },
-          "QA/QC" = qa_qc_cell(x),
-          "Analysis Date/Time" = if (!is.null(x$created_at)) {
-            format(x$created_at, "%Y-%m-%d\n%H:%M:%S")
-          } else {
-            NA_character_
-          },
-          "Analyst" = if (!is.null(x$operator)) x$operator else NA_character_,
-          check.names = FALSE,
-          stringsAsFactors = FALSE
-        )
-      })
-
-      if (length(rows) == 0) {
-        return(data.frame(
-          "Sample Name" = character(0),
-          "Sample Type" = character(0),
-          "Analysis Temp (\u00b0 C)" = character(0),
-          "Viscometer ID" = character(0),
-          "t 1 (s)" = character(0),
-          "t 2 (s)" = character(0),
-          "Visc 1 (mm\u00B2/s)" = character(0),
-          "Visc 2 (mm\u00B2/s)" = character(0),
-          "Average Visc" = character(0),
-          "QA/QC" = character(0),
-          "Analysis Date/Time" = character(0),
-          "Analyst" = character(0),
-          check.names = FALSE,
-          stringsAsFactors = FALSE
-        ))
-      }
-
-      do.call(rbind, rows)
+      locked_results()
+      locked_results_data_frame(locked_results())
     },
     striped = FALSE,
     bordered = FALSE,
     spacing = "s",
     sanitize.text.function = function(str) str
   )
+
+  output$report_export_status <- shiny::renderUI({
+    status <- export_status()
+    if (is.null(status)) {
+      return(NULL)
+    }
+
+    ok <- isTRUE(status$ok)
+    bslib::card(
+      class = if (ok) "border-success" else "border-danger",
+      shiny::tags$span(
+        class = if (ok) "text-success" else "text-danger",
+        status$message
+      )
+    )
+  })
+
+  # Export every row currently visible in the reporting table to a CSV file
+  # named kinvicalc-<YYYY-MM-DD_HHMMSS>.csv under <desktop>/reports (see
+  # reports_export_directory()). The QA/QC column is flattened from its HTML
+  # colour spans to plain "Determ: Pass; r: ..." text and the embedded line
+  # break in Analysis Date/Time becomes a space, so the file opens cleanly in
+  # spreadsheet software.
+  shiny::observeEvent(input$export_results_csv, {
+    if (length(locked_results()) == 0) {
+      export_status(list(ok = FALSE, message = "No locked results to export."))
+      shiny::showNotification("No locked results to export.", type = "warning")
+      return(invisible(NULL))
+    }
+
+    df <- locked_results_data_frame(locked_results())
+    df[["QA/QC"]] <- gsub(
+      "<[^>]*>",
+      "",
+      gsub("<br\\s*/?>", "; ", df[["QA/QC"]])
+    )
+    df[["Analysis Date/Time"]] <- gsub(
+      "\n",
+      " ",
+      df[["Analysis Date/Time"]],
+      fixed = TRUE
+    )
+
+    file_name <- sprintf(
+      "kinvicalc-%s.csv",
+      format(Sys.time(), "%Y-%m-%d_%H%M%S")
+    )
+    file_path <- NA_character_
+    tryCatch(
+      {
+        dir_path <- reports_export_directory()
+        file_path <- write_report_csv(df, file.path(dir_path, file_name))
+      },
+      error = function(e) {
+        export_status(list(
+          ok = FALSE,
+          message = paste("Report export failed:", conditionMessage(e))
+        ))
+        shiny::showNotification(
+          paste("Report export failed:", conditionMessage(e)),
+          type = "error"
+        )
+      }
+    )
+
+    if (!is.na(file_path)) {
+      n <- nrow(df)
+      export_status(list(
+        ok = TRUE,
+        message = sprintf(
+          "Exported %d locked result%s to %s",
+          n,
+          if (n == 1) "" else "s",
+          file_path
+        )
+      ))
+      shiny::showNotification(
+        sprintf("Report exported successfully: %s", file_path),
+        type = "message"
+      )
+    }
+  })
+
+  # Clearing results is destructive (the session table holds the only copy of
+  # locked results until they are exported), so it goes through a confirmation
+  # modal rather than acting immediately.
+  shiny::observeEvent(input$clear_results, {
+    if (length(locked_results()) == 0) {
+      shiny::showNotification("No locked results to clear.", type = "warning")
+      return(invisible(NULL))
+    }
+
+    n <- length(locked_results())
+    shiny::showModal(shiny::modalDialog(
+      title = "Clear all results?",
+      sprintf(
+        "This will remove the %d locked sample result%s from the reporting table. This action cannot be undone.",
+        n,
+        if (n == 1) "" else "s"
+      ),
+      easyClose = TRUE,
+      footer = shiny::tagList(
+        shiny::modalButton("Cancel"),
+        shiny::actionButton("confirm_clear_results", "Clear results")
+      )
+    ))
+  })
+
+  shiny::observeEvent(input$confirm_clear_results, {
+    shiny::removeModal()
+    locked_results(list())
+    export_status(NULL)
+    lock_message(NULL)
+    shiny::showNotification("All locked results cleared.", type = "message")
+  })
 
   output$new_viscometer_id_preview <- shiny::renderUI({
     preview <- tryCatch(
@@ -1169,7 +1351,21 @@ run_app <- function() {
           bslib::card_header(
             "Kinematic Viscosity Results - Characterization Laboratory, NRCan"
           ),
-          shiny::tableOutput("locked_values_table")
+          shiny::div(
+            style = "display: flex; gap: 0.5rem; margin-bottom: 0.75rem;",
+            shiny::actionButton(
+              "export_results_csv",
+              "Export CSV",
+              class = "btn-sm btn-outline-primary"
+            ),
+            shiny::actionButton(
+              "clear_results",
+              "Clear results",
+              class = "btn-sm btn-outline-danger"
+            )
+          ),
+          shiny::tableOutput("locked_values_table"),
+          shiny::uiOutput("report_export_status")
         )
       ),
       bslib::nav_panel(

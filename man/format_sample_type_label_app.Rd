@@ -5,8 +5,6 @@
 \title{Format a sample type code as a human-readable label.}
 \usage{
 format_sample_type_label_app(sample_type)
-
-format_sample_type_label_app(sample_type)
 }
 \arguments{
 \item{sample_type}{A sample type code.}
@@ -16,8 +14,6 @@ A character scalar title-case label, e.g. \code{"base_oil"} becomes
 \code{"Base Oil"}.
 }
 \description{
-Format a sample type code as a human-readable label.
-
 Format a sample type code as a human-readable label.
 }
 \examples{

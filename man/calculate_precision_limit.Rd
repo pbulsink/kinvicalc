@@ -25,4 +25,3 @@ kinvicalc:::calculate_precision_limit(rule, average_value = 5.5)
 
 options(old_opt)
 }
-\keyword{internal}

@@ -369,12 +369,12 @@ test_that("app_server supports viscometer maintenance actions ", {
         fixed = TRUE
       )
       expect_false(is.na(get_viscometer("016-00016")$archived_at[1]))
-
       session$setInputs(
         unarchive_viscometer_id = "016-00016",
         unarchive_viscometer = 1
       )
       session$flushReact()
+
       expect_match(
         as.character(output$maintenance_status$html),
         "Unarchived viscometer 016-00016.",
@@ -382,6 +382,220 @@ test_that("app_server supports viscometer maintenance actions ", {
       )
       expect_true(is.na(get_viscometer("016-00016")$archived_at[1]))
       expect_true(nrow(list_viscometers()) >= 1)
+    })
+  })
+})
+
+test_that("reports_export_directory honours the kinvicalc.reports_dir option", {
+  dir <- file.path(tempdir(), "kinvicalc-reports-override")
+  unlink(dir, recursive = TRUE)
+  withr::local_options(kinvicalc.reports_dir = dir)
+
+  out <- kinvicalc:::reports_export_directory()
+
+  # The option names the export directory itself; no extra subfolder is added.
+  expect_equal(out, dir)
+  expect_true(dir.exists(dir))
+})
+
+test_that("reports_export_directory defaults to a reports folder on the desktop", {
+  fake_home <- file.path(
+    tempdir(),
+    sprintf("kinvicalc-fake-home-%d", Sys.getpid())
+  )
+  unlink(fake_home, recursive = TRUE)
+  dir.create(file.path(fake_home, "Desktop"), recursive = TRUE)
+  withr::local_envvar(USERPROFILE = fake_home, OneDrive = "")
+
+  out <- kinvicalc:::reports_export_directory()
+
+  expect_equal(out, file.path(fake_home, "Desktop", "reports"))
+  expect_true(dir.exists(out))
+})
+
+test_that("write_report_csv writes a readable UTF-8 CSV (BOM on Windows)", {
+  f <- file.path(tempdir(), "kinvicalc-report-csv-test.csv")
+  unlink(f)
+  on.exit(unlink(f), add = TRUE)
+
+  out <- kinvicalc:::write_report_csv(
+    data.frame(a = c("mm\u00B2/s", "\u00b0C")),
+    f
+  )
+  expect_identical(out, f)
+
+  back <- utils::read.csv(f)
+  expect_equal(back$a, c("mm\u00B2/s", "\u00b0C"))
+
+  if (.Platform$OS.type == "windows") {
+    bom <- readBin(f, what = "raw", n = 3)
+    expect_equal(as.integer(bom), c(239L, 187L, 191L))
+  }
+})
+
+test_that("app_server exports all visible results to a timestamped CSV report", {
+  with_test_reference_db({
+    viscometer <- tibble::tibble(
+      viscometer_size = 20,
+      serial_number = "00020",
+      status = "active",
+      factor_40_top = 0.025,
+      factor_40_bottom = 0.025,
+      factor_100_top = 0.025,
+      factor_100_bottom = 0.025
+    )
+    add_test_viscometer(viscometer)
+
+    reports_dir <- file.path(tempdir(), "kinvicalc-reports-e2e")
+    unlink(reports_dir, recursive = TRUE)
+    withr::local_options(kinvicalc.reports_dir = reports_dir)
+
+    shiny::testServer(kinvicalc:::app_server, {
+      # Row 1: base oil, equal flow times -> determinability passes (diff 0).
+      session$setInputs(
+        user_id = "tester",
+        sample_id = "export-001",
+        viscometer_id = "020-00020",
+        sample_type = "base_oil",
+        analysis_temperature_c = 40,
+        time_1 = 300,
+        time_2 = 300
+      )
+      session$flushReact()
+      session$setInputs(lock = 1)
+      session$flushReact()
+
+      # Row 2: standard sample at the exact expected value -> Determ/r/R pass.
+      session$setInputs(
+        sample_id = "export-002",
+        sample_type = "standard",
+        expected_value = 7.5,
+        lock = 2
+      )
+      session$flushReact()
+
+      expect_true(grepl(
+        "export-001",
+        as.character(output$locked_values_table),
+        fixed = TRUE
+      ))
+      expect_true(grepl(
+        "export-002",
+        as.character(output$locked_values_table),
+        fixed = TRUE
+      ))
+
+      session$setInputs(export_results_csv = 1)
+      session$flushReact()
+
+      files <- list.files(
+        reports_dir,
+        pattern = "^kinvicalc-[0-9]{4}-[0-9]{2}-[0-9]{2}_[0-9]{6}\\.csv$"
+      )
+      expect_length(files, 1)
+
+      # The status card shows the full file path.
+      status_html <- as.character(output$report_export_status$html)
+      expect_true(grepl("Exported 2 locked results", status_html, fixed = TRUE))
+      expect_true(grepl(
+        file.path(reports_dir, files[1]),
+        status_html,
+        fixed = TRUE
+      ))
+
+      csv <- utils::read.csv(
+        file.path(reports_dir, files[1]),
+        check.names = FALSE
+      )
+      expect_equal(nrow(csv), 2)
+      expect_equal(csv[["Sample Name"]], c("export-001", "export-002"))
+      # QA/QC is flattened from HTML spans to plain pass/fail text.
+      expect_equal(csv[["QA/QC"]][1], "Determ: Pass")
+      expect_equal(csv[["QA/QC"]][2], "Determ: Pass; r: Pass; R: Pass")
+      # The embedded line break in the timestamp column becomes a space.
+      expect_true(
+        all(grepl(
+          "^[0-9]{4}-[0-9]{2}-[0-9]{2} [0-9]{2}:[0-9]{2}:[0-9]{2}$",
+          csv[["Analysis Date/Time"]]
+        ))
+      )
+    })
+  })
+})
+
+test_that("app_server warns and writes no file when exporting with no locked results", {
+  with_test_reference_db({
+    reports_dir <- file.path(tempdir(), "kinvicalc-reports-empty")
+    unlink(reports_dir, recursive = TRUE)
+    withr::local_options(kinvicalc.reports_dir = reports_dir)
+
+    shiny::testServer(kinvicalc:::app_server, {
+      session$setInputs(export_results_csv = 1)
+      session$flushReact()
+
+      status <- output$report_export_status
+      expect_false(is.null(status))
+      expect_match(
+        as.character(status$html),
+        "No locked results to export.",
+        fixed = TRUE
+      )
+    })
+
+    expect_length(suppressWarnings(list.files(reports_dir)), 0)
+  })
+})
+
+test_that("app_server clears locked results only after confirmation", {
+  with_test_reference_db({
+    viscometer <- tibble::tibble(
+      viscometer_size = 21,
+      serial_number = "00021",
+      status = "active",
+      factor_40_top = 0.025,
+      factor_40_bottom = 0.025,
+      factor_100_top = 0.025,
+      factor_100_bottom = 0.025
+    )
+    add_test_viscometer(viscometer)
+
+    shiny::testServer(kinvicalc:::app_server, {
+      session$setInputs(
+        user_id = "tester",
+        sample_id = "clear-001",
+        viscometer_id = "021-00021",
+        sample_type = "base_oil",
+        analysis_temperature_c = 40,
+        time_1 = 300,
+        time_2 = 300
+      )
+      session$flushReact()
+      session$setInputs(lock = 1)
+      session$flushReact()
+
+      expect_true(grepl(
+        "clear-001",
+        as.character(output$locked_values_table),
+        fixed = TRUE
+      ))
+
+      # Clicking "Clear results" only opens the confirmation modal; the table
+      # is untouched until the user confirms.
+      session$setInputs(clear_results = 1)
+      session$flushReact()
+      expect_true(grepl(
+        "clear-001",
+        as.character(output$locked_values_table),
+        fixed = TRUE
+      ))
+
+      session$setInputs(confirm_clear_results = 1)
+      session$flushReact()
+      expect_false(grepl(
+        "clear-001",
+        as.character(output$locked_values_table),
+        fixed = TRUE
+      ))
     })
   })
 })
